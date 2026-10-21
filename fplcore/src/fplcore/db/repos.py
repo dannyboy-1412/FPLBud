@@ -360,6 +360,47 @@ def get_entry_cache(conn: Connection, entry_id: int, event: int, ttl_seconds: in
     return row["payload"] if row else None
 
 
+def get_suggested_lineup(
+    conn: Connection,
+    user_id: Any,
+    entry_id: int,
+    gameweek: int,
+    squad_hash: str,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        select lineup from suggested_lineups
+         where user_id = %s and entry_id = %s and gameweek = %s and squad_hash = %s
+        """,
+        [user_id, entry_id, gameweek, squad_hash],
+    ).fetchone()
+    if row is None:
+        return None
+    lineup = row["lineup"]
+    return lineup if isinstance(lineup, dict) else None
+
+
+def save_suggested_lineup(
+    conn: Connection,
+    *,
+    user_id: Any,
+    entry_id: int,
+    gameweek: int,
+    squad_hash: str,
+    lineup: dict[str, Any],
+) -> None:
+    conn.execute(
+        """
+        insert into suggested_lineups (user_id, entry_id, gameweek, squad_hash, lineup)
+        values (%s, %s, %s, %s, %s)
+        on conflict (user_id, entry_id, gameweek, squad_hash) do update
+          set lineup = excluded.lineup,
+              created_at = now()
+        """,
+        [user_id, entry_id, gameweek, squad_hash, Json(lineup)],
+    )
+
+
 def put_entry_cache(conn: Connection, entry_id: int, event: int, payload: dict[str, Any]) -> None:
     conn.execute(
         """
@@ -453,6 +494,11 @@ def prune_retention(conn: Connection) -> dict[str, int]:
              where computed_for_gw < %s or computed_for_gw > %s
             """,
             [windows.metrics_min_gw, windows.metrics_max_gw],
+        )
+        counts["suggested_lineups"] = _delete(
+            conn,
+            "delete from suggested_lineups where gameweek < %s",
+            [windows.next_gw],
         )
     counts["player_daily_snapshots"] = _delete(
         conn,

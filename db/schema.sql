@@ -389,6 +389,19 @@ create table llm_usage (
 );
 alter table llm_usage enable row level security;
 
+-- One suggested XI per user, team, gameweek, and hash of the 15 players plus weights.
+-- News and metric rebuilds do not change the key. Ingest deletes earlier gameweeks.
+create table suggested_lineups (
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  entry_id      integer not null,
+  gameweek      smallint not null,
+  squad_hash    text not null,
+  lineup        jsonb not null,
+  created_at    timestamptz not null default now(),
+  primary key (user_id, entry_id, gameweek, squad_hash)
+);
+alter table suggested_lineups enable row level security;
+
 -- RLS: FastAPI and the ingest job connect via DATABASE_URL (server-side, bypasses RLS) and enforce
 -- ownership in code (run.user_id = JWT sub). Policies below are defence in depth and would allow
 -- future Supabase Realtime for owners. Everything without a policy is closed to anon/authenticated.
@@ -398,6 +411,8 @@ alter table agent_runs        enable row level security;
 alter table agent_suggestions enable row level security;
 
 create policy "tracked_entries: read own" on tracked_entries
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy "suggested_lineups: read own" on suggested_lineups
   for select to authenticated using ((select auth.uid()) = user_id);
 create policy "agent_runs: read own" on agent_runs
   for select to authenticated using ((select auth.uid()) = user_id);

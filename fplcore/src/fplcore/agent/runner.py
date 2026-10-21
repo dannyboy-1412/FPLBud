@@ -221,7 +221,8 @@ async def _explanations(
     return texts, getattr(explainer, "source", "template")
 
 
-def _try_llm_cap(conn: Connection, cap: int) -> bool:
+def try_llm_cap(conn: Connection, cap: int) -> bool:
+    """Reserve one daily model call. A full day leaves the counter unchanged."""
     row = conn.execute(
         """
         insert into llm_usage (day, calls) values (current_date, 1)
@@ -305,7 +306,7 @@ async def run_claimed(
         update_progress(conn, run_id, stage="explain", progress=90)
         conn.commit()
         allow_llm = cfg.llm_enabled and run.get("trigger") in {"import", "user_rerun"}
-        if allow_llm and not _try_llm_cap(conn, cfg.llm_daily_call_cap):
+        if allow_llm and not try_llm_cap(conn, cfg.llm_daily_call_cap):
             allow_llm = False
         texts, source = await _explanations(results, cfg, allow_llm=allow_llm)
         conn.execute("delete from agent_suggestions where run_id = %s", [run_id])

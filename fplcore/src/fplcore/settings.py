@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_base_url: str = "https://openrouter.ai/api/v1"
     llm_timeout_seconds: float = 10
+    llm_lineup_timeout_seconds: float = 45
+    llm_lineup_max_searches: int = 4
     llm_daily_call_cap: int = 200
 
     sentry_dsn: str = ""

@@ -57,6 +57,42 @@ async def test_llm_fallback_on_invented_number() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_with_search_sends_web_tool_and_parses_lineup() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        content = json.dumps(
+            {
+                "starters": [1, 2, 3],
+                "bench": [4],
+                "captain_id": 1,
+                "vice_id": 2,
+                "summary": "Fit players only.",
+            }
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    settings = Settings(
+        llm_api_key="test",
+        llm_model="test/model",
+        llm_base_url="https://openrouter.ai/api/v1",
+        llm_lineup_timeout_seconds=5,
+        llm_lineup_max_searches=4,
+    )
+    client = OpenRouterClient(settings, transport=httpx.MockTransport(handler))
+    parsed = await client.chat_with_search(system="rules", user="squad")
+    tool = seen["body"]["tools"][0]
+    assert tool["type"] == "openrouter:web_search"
+    assert tool["parameters"]["max_uses"] == 4
+    assert tool["parameters"]["max_results"] == 5
+    assert tool["parameters"]["search_context_size"] == "low"
+    assert parsed["captain_id"] == 1
+    assert parsed["summary"] == "Fit players only."
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_llm_timeout_falls_back() -> None:
     settings = Settings(

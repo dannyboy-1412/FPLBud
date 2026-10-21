@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
+from fastapi import HTTPException
 from psycopg import Connection
 
-from fplcore.client import FplClient
+from fplcore.agent.runner import try_llm_cap
+from fplcore.client import FplClient, FplNotFoundError
 from fplcore.constants import (
     DEFAULT_WEIGHTS,
     ENTRY_CACHE_TTL_SECONDS,
@@ -16,9 +19,18 @@ from fplcore.db import stats_repo
 from fplcore.db.repos import (
     current_season_id,
     get_entry_cache,
+    get_suggested_lineup,
     put_entry_cache,
+    save_suggested_lineup,
 )
 from fplcore.explain.template import TemplateExplainer
+from fplcore.lineup import (
+    LineupRejected,
+    build_lineup_dossier,
+    choose_lineup,
+    lineup_cache_hash,
+    validate_lineup,
+)
 from fplcore.metrics.combine import (
     availability,
     combined_score,
@@ -27,6 +39,7 @@ from fplcore.metrics.combine import (
 )
 from fplcore.models import BootstrapStatic, Entry, EntryHistory, PicksPayload, TransferRow
 from fplcore.optimise import PlayerOpt, optimise_horizon
+from fplcore.settings import Settings
 from fplcore.stats.insights import (
     bonus_leaders,
     defensive_leaders,
@@ -570,3 +583,104 @@ def season_stats_payload(
     rows = season_rows(history.current, gw_map, history.chips)
     returns = captain_returns(history.current, picks_by_event, points, names, most_captained)
     return {"rows": rows, "summary": season_summary(rows), "captain_returns": returns}
+
+
+def _squad_opts(conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float]) -> list[PlayerOpt]:
+    loaded = {player.id: player for player in load_opt_players(conn, snapshot, weights, horizon=1)}
+    opts: list[PlayerOpt] = []
+    for player in snapshot.squad_players:
+        element = int(player["element"])
+        existing = loaded.get(element)
+        if existing is not None:
+            opts.append(replace(existing, in_squad=True, can_in=False, locked=True))
+            continue
+        opts.append(
+            PlayerOpt(
+                id=element,
+                web_name=str(player.get("web_name") or ""),
+                team_id=int(player["team_id"]),
+                position_id=int(player["position_id"]),
+                cost=int(player.get("now_cost") or 0),
+                sell=int(player.get("now_cost") or 0),
+                in_squad=True,
+                can_in=False,
+                locked=True,
+                proj=[0.0],
+                scores_gw1={},
+            )
+        )
+    return opts
+
+
+def _cached_lineup(payload: dict[str, Any] | None, positions: dict[int, int]) -> dict[str, Any] | None:
+    if not payload:
+        return None
+    try:
+        validate_lineup(payload, positions, source=str(payload.get("source") or "llm"))
+    except LineupRejected:
+        return None
+    return payload
+
+
+async def build_suggested_xi(conn: Connection, settings: Settings, user_id: Any) -> dict[str, Any]:
+    """Line up the signed-in squad for the next gameweek.
+
+    A stored row for this user, team, gameweek and squad is returned as-is and
+    does not reserve a model call. News and metric rebuilds leave that row in place.
+    """
+    profile = conn.execute(
+        "select fpl_entry_id, weights from public.profiles where id = %s",
+        [user_id],
+    ).fetchone()
+    if not profile or not profile["fpl_entry_id"]:
+        raise HTTPException(status_code=400, detail="no team saved")
+    entry_id = int(profile["fpl_entry_id"])
+    weights = profile["weights"] or DEFAULT_WEIGHTS
+    try:
+        async with FplClient(settings) as client:
+            payload, bootstrap = await load_merged_entry(conn, client, entry_id)
+    except FplNotFoundError:
+        raise HTTPException(status_code=404, detail="team not found") from None
+    snapshot = snapshot_from_cache(payload, bootstrap, current_season_id(conn))
+    opts = _squad_opts(conn, snapshot, weights)
+    if len(opts) != 15:
+        raise HTTPException(status_code=422, detail="squad is incomplete")
+    player_ids = [int(player["element"]) for player in snapshot.squad_players]
+    squad_hash = lineup_cache_hash(player_ids, weights)
+    gameweek = stats_repo.next_gw_id(conn, snapshot.season_id)
+    positions = {player.id: player.position_id for player in opts}
+    cached = _cached_lineup(
+        get_suggested_lineup(conn, user_id, entry_id, gameweek, squad_hash),
+        positions,
+    )
+    if cached is not None:
+        return cached
+
+    team_names = {team.id: team.short_name for team in bootstrap.teams}
+    projections = {player.id: float(player.proj[0]) if player.proj else 0.0 for player in opts}
+    dossier = build_lineup_dossier(
+        snapshot.squad_players,
+        projections,
+        team_names,
+        stats_repo.next_event_fixtures(conn),
+    )
+    allow_llm = bool(settings.llm_api_key and settings.llm_model)
+    if allow_llm:
+        allow_llm = try_llm_cap(conn, settings.llm_daily_call_cap)
+        if allow_llm:
+            conn.commit()
+    try:
+        lineup = await choose_lineup(opts, dossier, settings=settings, allow_llm=allow_llm)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="could not build a lineup") from exc
+    stored = lineup.to_dict()
+    save_suggested_lineup(
+        conn,
+        user_id=user_id,
+        entry_id=entry_id,
+        gameweek=gameweek,
+        squad_hash=squad_hash,
+        lineup=stored,
+    )
+    conn.commit()
+    return stored

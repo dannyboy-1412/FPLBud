@@ -339,6 +339,21 @@ body {
   letter-spacing: -0.02em;
 }
 
+.pitch-name.is-doubt,
+.pitch-name.is-out {
+  padding-bottom: 3px;
+}
+
+.pitch-name.is-doubt {
+  background: #f5c400;
+  color: #1a1400;
+}
+
+.pitch-name.is-out {
+  background: #d81919;
+  color: #fff;
+}
+
 .pitch-club {
   padding: 0 4px 3px;
   color: rgba(255, 255, 255, 0.72);
@@ -350,18 +365,13 @@ body {
 
 .pitch-opp {
   padding: 2px 3px 3px;
+  background: #e7e7e7;
+  color: #1a1a1a;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: 0.01em;
 }
-
-.pitch-opp[data-fdr="0"] { background: #2a2f2c; color: #d5ddd8; }
-.pitch-opp[data-fdr="1"] { background: #375523; color: #fff; }
-.pitch-opp[data-fdr="2"] { background: #01fc7a; color: #102117; }
-.pitch-opp[data-fdr="3"] { background: #e7e7e7; color: #1a1a1a; }
-.pitch-opp[data-fdr="4"] { background: #ff1751; color: #fff; }
-.pitch-opp[data-fdr="5"] { background: #80072d; color: #fff; }
 
 .pitch-badge,
 .pitch-order {

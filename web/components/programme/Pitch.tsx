@@ -52,18 +52,34 @@ function Shirt({ club }: { club?: string }) {
 
 function fixtureBars(fixtures: FixtureChip[] | undefined) {
   if (!fixtures?.length) {
-    return [{ key: "blank", label: "—", fdr: 0 }];
+    return [{ key: "blank", label: "—" }];
   }
   return fixtures.map((fixture, index) => ({
     key: `${fixture.opponent}-${fixture.is_home ? "H" : "A"}-${index}`,
     label: `${fixture.opponent} (${fixture.is_home ? "H" : "A"})`,
-    fdr: fixture.fdr >= 1 && fixture.fdr <= 5 ? fixture.fdr : 0,
   }));
 }
 
 function fixtureSummary(fixtures: FixtureChip[] | undefined) {
   if (!fixtures?.length) return "no fixture";
   return fixtures.map((fixture) => `${fixture.opponent} ${fixture.is_home ? "home" : "away"}`).join(", ");
+}
+
+type PlayingChance = "fit" | "doubt" | "out";
+
+function playingChance(player: SquadPlayer): PlayingChance {
+  const chance = player.chance_of_playing_next_round;
+  if (chance != null && chance < 100) return chance >= 75 ? "doubt" : "out";
+  if (chance == null && player.status === "d") return "doubt";
+  if (chance == null && player.status && player.status !== "a") return "out";
+  return "fit";
+}
+
+function chanceLabel(player: SquadPlayer, chance: PlayingChance) {
+  if (chance === "fit") return null;
+  const percent = player.chance_of_playing_next_round;
+  if (percent != null) return `${percent}% chance of playing`;
+  return chance === "doubt" ? "doubtful" : "unlikely to play";
 }
 
 function PlayerCard({
@@ -77,24 +93,26 @@ function PlayerCard({
 }) {
   const club = player.team_short?.toUpperCase() ?? "";
   const bars = fixtureBars(player.fixtures);
+  const chance = playingChance(player);
+  const chanceText = chanceLabel(player, chance);
   const role = player.is_captain ? "captain" : player.is_vice_captain ? "vice-captain" : null;
   return (
     <button
       type="button"
       className={`pitch-card${incoming ? " is-in" : ""}`}
-      aria-label={`${player.web_name}, ${club || "club unknown"}, ${fixtureSummary(player.fixtures)}${role ? `, ${role}` : ""}`}
+      aria-label={`${player.web_name}, ${club || "club unknown"}, ${fixtureSummary(player.fixtures)}${chanceText ? `, ${chanceText}` : ""}${role ? `, ${role}` : ""}`}
     >
       {order != null ? <span className="pitch-order">{order}</span> : null}
       {player.is_captain ? <span className="pitch-badge is-c">C</span> : null}
       {!player.is_captain && player.is_vice_captain ? <span className="pitch-badge is-v">V</span> : null}
       <Shirt club={club} />
       <span className="pitch-plate">
-        <span className="pitch-name" title={player.web_name}>
+        <span className={`pitch-name${chance === "fit" ? "" : ` is-${chance}`}`} title={chanceText ?? player.web_name}>
           {player.web_name}
         </span>
         <span className="pitch-club">{club || "—"}</span>
         {bars.map((bar) => (
-          <span key={bar.key} className="pitch-opp" data-fdr={bar.fdr}>
+          <span key={bar.key} className="pitch-opp">
             {bar.label}
           </span>
         ))}

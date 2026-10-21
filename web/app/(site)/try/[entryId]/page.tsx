@@ -40,7 +40,7 @@ async function TryTeam({ entryId }: { entryId: number }) {
     if (isTeamNotFound(err)) return <UnknownTeam />;
     throw err;
   }
-  return <TeamView team={team} leaders={await leadersPromise} />;
+  return <TeamView team={team} leaders={await leadersPromise} lineup="locked" />;
 }
 
 function UnknownTeam() {

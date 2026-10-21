@@ -1,6 +1,6 @@
 import { PlayerCell, StatTable } from "@/components/dashboard/stats/StatTable";
 import { signed } from "@/components/dashboard/stats/format";
-import { Pitch } from "@/components/programme/Pitch";
+import { PitchSwitcher, type PitchLineup } from "@/components/programme/PitchSwitcher";
 import type { PlayerRow, PublicTeam, VarianceRow } from "@/lib/api";
 
 const POSITIONS = [
@@ -63,10 +63,12 @@ export function TeamView({
   team,
   leaders,
   showHeader = true,
+  lineup = "locked",
 }: {
   team: PublicTeam;
   leaders: Record<number, PlayerRow[]>;
   showHeader?: boolean;
+  lineup?: PitchLineup;
 }) {
   return (
     <>
@@ -78,7 +80,7 @@ export function TeamView({
         caption="Projected points this gameweek, starting XI plus captain."
       />
       <div className="mt-8">
-        <Pitch team={team} />
+        <PitchSwitcher team={team} lineup={lineup} />
       </div>
       <div className="grid md:grid-cols-2 gap-x-12 gap-y-10 mt-10">
         <section>

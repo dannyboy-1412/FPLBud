@@ -1,3 +1,25 @@
+import { PitchMarkings } from "@/components/programme/Pitch";
+
+const SHIRT =
+  "M10 5.5 14.2 2.2h7.6L26 5.5 33.2 8.4 29.4 13.2 26 11.4V28H10V11.4L6.6 13.2 2.8 8.4Z";
+
+function GhostPlayer({ delay }: { delay: number }) {
+  const shift = { animationDelay: `${delay}ms` };
+  return (
+    <div className="pitch-card is-ghost">
+      <svg className="pitch-shirt" width="36" height="32" viewBox="0 0 36 32" aria-hidden style={shift}>
+        <path className="pitch-ghost-kit" d={SHIRT} />
+        <path className="pitch-ghost-neck" d="M14.2 2.6c1.2 2.6 2.4 3.8 3.8 3.8s2.6-1.2 3.8-3.8" fill="none" />
+      </svg>
+      <span className="pitch-plate pitch-ghost-plate">
+        <span className="pitch-ghost-bar is-name" style={shift} />
+        <span className="pitch-ghost-bar is-club" style={shift} />
+        <span className="pitch-ghost-bar is-opp" style={shift} />
+      </span>
+    </div>
+  );
+}
+
 export function HeadingSkeleton() {
   return (
     <div className="mb-6">
@@ -8,27 +30,29 @@ export function HeadingSkeleton() {
 }
 
 export function PitchSkeleton() {
+  const rows = [1, 4, 4, 2];
   return (
     <div className="pitch-unit" aria-hidden>
       <div className="pitch">
+        <PitchMarkings />
         <div className="pitch-rows">
-          {[1, 4, 4, 2].map((count, row) => (
-            <div key={row} className="pitch-row">
-              {Array.from({ length: count }, (_, i) => (
-                <div key={i} className="pitch-card">
-                  <div className="skeleton h-8 w-8 rounded-sm mx-auto" />
-                  <div className="skeleton h-12 w-full mt-1" />
-                </div>
-              ))}
-            </div>
-          ))}
+          {rows.map((count, row) => {
+            const start = rows.slice(0, row).reduce((sum, size) => sum + size, 0);
+            return (
+              <div key={row} className="pitch-row">
+                {Array.from({ length: count }, (_, index) => (
+                  <GhostPlayer key={start + index} delay={(start + index) * 90} />
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="pitch-subs">
-        <div className="skeleton h-3 w-24 mb-3" />
+        <p className="kicker">Substitutes</p>
         <div className="pitch-row">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="skeleton h-16 w-[74px]" />
+          {Array.from({ length: 4 }, (_, index) => (
+            <GhostPlayer key={index} delay={(11 + index) * 90} />
           ))}
         </div>
       </div>

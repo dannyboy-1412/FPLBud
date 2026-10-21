@@ -121,7 +121,7 @@ function PlayerCard({
   );
 }
 
-function PitchMarkings() {
+export function PitchMarkings() {
   return (
     <div className="pitch-mark" aria-hidden>
       <span className="half" />

@@ -206,6 +206,15 @@ export type PlayerRow = {
 
 export type HorizonTab = "1" | "3" | "5";
 
+export type SuggestedXi = {
+  starters: number[];
+  bench: number[];
+  captain_id: number;
+  vice_id: number;
+  summary: string;
+  source: "llm" | "optimiser";
+};
+
 export type StatPlayer = {
   id: number;
   web_name: string;

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FPLBud · Floodlight</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/landing.html">01 Programme</a>
+    <a href="../02-floodlight/landing.html" aria-current="page">02 Floodlight</a>
+    <a href="../03-blueprint/landing.html">03 Blueprint</a>
+    <a href="../04-sticker-album/landing.html">04 Stickers</a>
+    <a href="../05-quant-desk/landing.html">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html" aria-current="page">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html">Guest</a>
+  </div>
+  <div class="page">
+    <header class="scoreboard">
+      <a class="wordmark" href="landing.html">
+        <svg class="flood-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M4 4l2.5 2.5M20 4l-2.5 2.5M4 20l2.5-2.5M20 20l-2.5-2.5"/></svg>
+        FPLBUD
+      </a>
+      <div class="sb-mod">
+        <span class="label">GW7</span>
+        <span class="div"></span>
+        <span class="led">2D 14:06:31</span>
+      </div>
+      <nav class="nav">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="#">Players</a>
+        <a href="#">Settings</a>
+        <a class="btn btn-ghost" href="#">Sign in</a>
+      </nav>
+    </header>
+
+    <section class="hero-block light-pool">
+      <svg viewBox="0 0 200 200" width="200" height="200" style="position:absolute;opacity:0.08;pointer-events:none" aria-hidden="true"><circle cx="100" cy="100" r="70" fill="none" stroke="#E9EEE8" stroke-width="1.5"/><line x1="0" y1="100" x2="200" y2="100" stroke="#E9EEE8"/></svg>
+      <h1 class="hero">See your next move clearly.</h1>
+      <p class="sub">Transfers, captain and chips for your FPL team, worked out in under a second.</p>
+      <form class="id-row" action="try.html" style="margin:0 auto;">
+        <input name="id" inputmode="numeric" placeholder="1234567" value="1234567" aria-label="Team ID" />
+        <button class="btn btn-primary" type="submit">Go</button>
+      </form>
+      <p class="label" style="margin-top:20px;">or <a href="#">Sign in with Google</a> for a saved team and 5-week plans</p>
+    </section>
+
+    <div class="steps">
+      <div><span class="n">01</span><h2 class="h2">Import</h2><p style="color:var(--chalk-dim)">Public team ID. No FPL password.</p></div>
+      <div><span class="n">02</span><h2 class="h2">Score</h2><p style="color:var(--chalk-dim)">Form, fixtures, home, expected stats.</p></div>
+      <div><span class="n">03</span><h2 class="h2">Plan</h2><p style="color:var(--chalk-dim)">Transfers, captain, chips. Under a second.</p></div>
+    </div>
+    <div class="cards-2">
+      <div class="card">
+        <p class="label">Guest</p>
+        <h2 class="h2">Next GW only</h2>
+        <p style="color:var(--chalk-dim)">Default tactics. Preview, then leave.</p>
+      </div>
+      <div class="card rec light-pool">
+        <p class="label" style="color:var(--sodium)">Signed in</p>
+        <h2 class="h2">5-week plans</h2>
+        <p style="color:var(--chalk-dim)">Saved team, custom tactics, chips, auto re-runs.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

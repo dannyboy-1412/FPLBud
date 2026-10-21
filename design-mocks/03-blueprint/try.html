@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview · Blueprint</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/try.html">01 Programme</a>
+    <a href="../02-floodlight/try.html">02 Floodlight</a>
+    <a href="../03-blueprint/try.html" aria-current="page">03 Blueprint</a>
+    <a href="../04-sticker-album/try.html">04 Stickers</a>
+    <a href="../05-quant-desk/try.html">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html" aria-current="page">Guest</a>
+  </div>
+  <div class="page">
+    <header class="hdr">
+      <a class="wordmark" href="landing.html">FPLBUD<small>REV.1</small></a>
+      <div class="deadline">GW07 DEADLINE  T−2D 14:06</div>
+    </header>
+    <h1 class="title" style="margin-top:24px;">Preview: Danny’s XI</h1>
+    <div data-tabs>
+      <div class="sheets" role="tablist">
+        <button role="tab" id="s1" aria-selected="true" aria-controls="p1">Sheet 1 · Next GW <small>+2.1</small></button>
+        <button role="tab" id="s3" aria-selected="false" aria-controls="p3" tabindex="-1">Sheet 2 · Next 3 🔒</button>
+        <button role="tab" id="s5" aria-selected="false" aria-controls="p5" tabindex="-1">Sheet 3 · Next 5 🔒</button>
+      </div>
+      <div role="tabpanel" id="p1" aria-labelledby="s1" class="panel" style="margin-top:0;"><span class="marker-lg">Sell Saka → Palmer</span><div class="data-xl">+2.1</div></div>
+      <div role="tabpanel" id="p3" aria-labelledby="s3" hidden class="hatch">
+        <div style="filter:blur(6px);padding:24px;"><div class="data-xl">+6.4</div></div>
+        <div class="lockbox">
+          <p class="label">Restricted sheet</p>
+          <h2 class="h2">5-week plan</h2>
+          <p>Sign in with Google to unlock your 5-week plan.</p>
+          <button class="btn btn-primary" type="button">Sign in with Google</button>
+        </div>
+      </div>
+      <div role="tabpanel" id="p5" aria-labelledby="s5" hidden class="hatch">
+        <div class="lockbox"><p class="label">Restricted sheet</p><h2 class="h2">5-week plan</h2><button class="btn btn-primary" type="button">Sign in</button></div>
+      </div>
+    </div>
+  </div>
+  <script src="../_tabs.js"></script>
+</body>
+</html>

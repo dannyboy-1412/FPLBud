@@ -1,4 +1,4 @@
--- FPL Assistant — Supabase Postgres schema (v1)
+-- FPLBud — Supabase Postgres schema (v1)
 -- Every column was checked against the live FPL API on 2026-10-12 (2026/27 season, GW6 current).
 -- Money is stored the way FPL stores it: integer tenths of £m (for example 51 = £5.1m).
 
@@ -8,7 +8,8 @@ set search_path = fpl, public;
 -- ---------- Reference data (from bootstrap-static) ----------
 create table seasons (
   id            text primary key,              -- '2026/27'
-  is_current    boolean not null default false
+  is_current    boolean not null default false,
+  total_players integer not null default 0     -- bootstrap-static.total_players
 );
 
 create table teams (
@@ -46,6 +47,8 @@ create table gameweeks (                        -- events
   finished      boolean not null,
   data_checked  boolean not null,
   average_entry_score integer,
+  highest_score integer,                       -- null until the GW is finished
+  most_captained integer,                      -- element id; null until published
   primary key (season_id, id)
 );
 
@@ -89,6 +92,19 @@ create table players (
   selected_by_percent numeric(5,1) not null,
   transfers_in_event  integer not null,
   transfers_out_event integer not null,
+  transfers_in        integer not null default 0,
+  transfers_out       integer not null default 0,
+  event_points        integer not null default 0,
+  goals_scored        integer not null default 0,
+  assists             integer not null default 0,
+  clean_sheets        integer not null default 0,
+  bonus               integer not null default 0,
+  bps                 integer not null default 0,
+  defensive_contribution integer not null default 0,
+  ict_index           numeric(5,1),
+  penalties_order     smallint,
+  corners_and_indirect_freekicks_order smallint,
+  direct_freekicks_order smallint,
   form          numeric(4,1) not null,         -- FPL's own form: average points per match over roughly the last 30 days
   points_per_game numeric(4,1) not null,
   total_points  integer not null,
@@ -121,6 +137,7 @@ create table player_daily_snapshots (
   primary key (season_id, player_id, snapshot_date),
   foreign key (season_id, player_id) references players(season_id, id)
 );
+create index player_daily_snapshots_date_idx on player_daily_snapshots (season_id, snapshot_date);
 
 -- ---------- Per-match history (element-summary/{id}.history, or event/{gw}/live) ----------
 create table player_gameweek_stats (
@@ -154,6 +171,16 @@ create table player_gameweek_stats (
 );
 create index pgs_round_idx on player_gameweek_stats (season_id, round);
 
+-- Slim season-long points for captain returns. Wide match rows are pruned.
+create table player_gw_points (
+  season_id     text not null,
+  player_id     integer not null,
+  round         smallint not null,
+  total_points  smallint not null,
+  primary key (season_id, player_id, round),
+  foreign key (season_id, player_id) references players(season_id, id)
+);
+
 -- ---------- Precomputed metric components (written by the ingest job) ----------
 -- One row per player per *target* gameweek (the next GW, and later the next N).
 -- Raw values are kept for display; *_score columns are normalised to 0..1 within position.
@@ -164,7 +191,7 @@ create table player_metrics (
   horizon       smallint not null default 1,   -- number of GWs aggregated, starting at computed_for_gw
   -- default metrics
   form_raw      numeric(6,3),  form_score      numeric(5,4),
-  fixture_raw   numeric(6,3),  fixture_score   numeric(5,4),   -- average (6 - FDR) across the horizon
+  fixture_raw   numeric(6,3),  fixture_score   numeric(5,4),   -- mean ease = (5 - FDR)/4 across that GW's fixtures
   home_raw      numeric(6,3),  home_score      numeric(5,4),   -- home share across the horizon, with a split adjustment
   xgi_raw       numeric(6,3),  xgi_score       numeric(5,4),   -- position-weighted xG/xA per 90 (recent plus season blend)
   -- optional metrics
@@ -179,25 +206,73 @@ create table player_metrics (
 );
 create index pm_gw_idx on player_metrics (season_id, computed_for_gw, horizon);
 
--- ---------- Users (optional in v1; anonymous use works without it) ----------
-create table user_settings (
-  user_id       uuid primary key references auth.users(id) on delete cascade,  -- Supabase Auth
-  fpl_entry_id  integer,
+-- ---------- Users: profiles (Supabase Auth, Google OAuth) ----------
+-- Lives in `public` (Supabase convention, exposed to supabase-js); everything else is in `fpl`.
+create table public.profiles (
+  id            uuid primary key references auth.users(id) on delete cascade,
+  display_name  text,                          -- from Google metadata at sign-up
+  avatar_url    text,
+  fpl_entry_id  integer check (fpl_entry_id > 0),   -- entered once at onboarding; public team ID
+  fpl_team_name text,                          -- cached for display
   weights       jsonb not null default
-    '{"form":0.30,"fixture":0.25,"home":0.10,"xgi":0.35,"value":0,"minutes":0,"trend":0}',
-  horizon       smallint not null default 3 check (horizon between 1 and 6),
+    '{"form":0.30,"fixture":0.25,"home":0.10,"xgi":0.35,"value":0,"minutes":0,"trend":0}'
+    check (jsonb_typeof(weights) = 'object'),
+  default_horizon smallint not null default 3 check (default_horizon in (1,3,5)),
   max_hits      smallint not null default 1 check (max_hits between 0 and 3),
+  onboarded_at  timestamptz,                   -- set when the team ID is first saved
+  last_active_at timestamptz not null default now(),  -- drives the background re-run cutoff
+  created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
-alter table user_settings enable row level security;
-create policy "own settings" on user_settings
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create index profiles_entry_idx  on public.profiles (fpl_entry_id);
+create index profiles_active_idx on public.profiles (last_active_at) where fpl_entry_id is not null;
 
--- Squad-import cache, so repeat requests don't hit FPL again (short TTL)
+alter table public.profiles enable row level security;
+-- Users can read and update only their own row. No insert/delete policies:
+-- rows are created by the trigger below and removed by cascade from auth.users.
+create policy "profiles: read own"   on public.profiles
+  for select to authenticated using ((select auth.uid()) = id);
+create policy "profiles: update own" on public.profiles
+  for update to authenticated using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
+
+-- Create a profile row automatically when someone signs in with Google for the first time.
+create function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.profiles (id, display_name, avatar_url)
+  values (new.id,
+          coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'),
+          new.raw_user_meta_data->>'avatar_url');
+  return new;
+end;
+$$;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+create function public.touch_updated_at() returns trigger
+language plpgsql set search_path = '' as $$
+begin new.updated_at := now(); return new; end;
+$$;
+create trigger profiles_touch_updated_at
+  before update on public.profiles
+  for each row execute function public.touch_updated_at();
+
+-- Shared cache of PUBLIC FPL entry responses (guests and users), 5-minute TTL. Holds no user data.
 create table entry_cache (
   entry_id      integer not null,
   event         smallint not null,
   payload       jsonb not null,                -- merged entry + picks + history + transfers
+  fetched_at    timestamptz not null default now(),
+  primary key (entry_id, event)
+);
+
+-- Finished-GW picks for signed-in users (captain returns). Past GWs never change, so one fetch each.
+create table entry_event_picks (
+  entry_id      integer not null,
+  event         smallint not null,
+  picks         jsonb not null,                -- [{element, position, multiplier, is_captain, is_vice_captain}]
+  active_chip   text,
   fetched_at    timestamptz not null default now(),
   primary key (entry_id, event)
 );
@@ -224,16 +299,17 @@ create table data_versions (
   created_at    timestamptz not null default now()
 );
 
--- Teams the agent keeps re-running for (anonymous users included; keyed by public FPL entry id)
+-- Teams the agent keeps re-running for: signed-in users only.
+-- Free tier: one row per user (enforced in the API); PK allows multiple teams for a future paid tier.
+-- Weights come from public.profiles; the inactivity cutoff uses profiles.last_active_at.
 create table tracked_entries (
-  entry_id      integer primary key,
-  user_id       uuid references auth.users(id) on delete set null,
-  weights       jsonb not null,                -- weights used for background re-runs
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  entry_id      integer not null,
   overrides     jsonb,                         -- {free_transfers, bank, squad[15]} if user-edited
-  first_seen_at timestamptz not null default now(),
-  last_seen_at  timestamptz not null default now()   -- background re-runs only if seen within 14 days
+  created_at    timestamptz not null default now(),
+  primary key (user_id, entry_id)
 );
-create index tracked_entries_seen_idx on tracked_entries (last_seen_at);
+create index tracked_entries_entry_idx on tracked_entries (entry_id);
 
 -- Immutable team context built at import (§6, §6A.1)
 create table team_snapshots (
@@ -251,15 +327,17 @@ create table team_snapshots (
   active_chip   text,
   flags         jsonb not null default '[]',   -- [{element, status, chance_of_playing_next_round, news}]
   overrides     jsonb,                         -- user edits applied on top of FPL data
+  created_by    uuid references auth.users(id) on delete cascade,  -- snapshots are only created for signed-in users
   content_hash  text not null,                 -- dedupe identical re-imports
   fetched_at    timestamptz not null default now(),
-  unique (entry_id, content_hash)
+  unique (entry_id, created_by, content_hash)
 );
 create index team_snapshots_entry_idx on team_snapshots (entry_id, fetched_at desc);
 
 -- Job queue + run history. Claimed with FOR UPDATE SKIP LOCKED.
 create table agent_runs (
   id            bigserial primary key,
+  user_id       uuid not null references auth.users(id) on delete cascade,
   entry_id      integer not null,
   snapshot_id   bigint not null references team_snapshots(id) on delete cascade,
   trigger       text not null check (trigger in
@@ -269,7 +347,7 @@ create table agent_runs (
                   ('queued','running','succeeded','failed','cancelled')),
   stage         text,                          -- context | horizon_1 | horizon_3 | horizon_5 | chips | explain
   progress      smallint not null default 0 check (progress between 0 and 100),
-  weights       jsonb not null,
+  weights       jsonb not null,                -- copied from profiles.weights at enqueue time
   weights_hash  text not null,
   data_version  bigint references data_versions(id),
   attempts      smallint not null default 0,
@@ -280,11 +358,11 @@ create table agent_runs (
   finished_at   timestamptz
 );
 create index agent_runs_queue_idx  on agent_runs (priority, created_at) where status = 'queued';
-create index agent_runs_entry_idx  on agent_runs (entry_id, created_at desc);
+create index agent_runs_user_idx   on agent_runs (user_id, created_at desc);
 create index agent_runs_stale_idx  on agent_runs (started_at) where status = 'running';
--- At most one pending/active run per team: repeat imports reuse it.
-create unique index agent_runs_one_active_per_entry
-  on agent_runs (entry_id) where status in ('queued','running');
+-- At most one pending/active run per (user, team): repeat imports reuse it.
+create unique index agent_runs_one_active_per_user_entry
+  on agent_runs (user_id, entry_id) where status in ('queued','running');
 
 -- One row per horizon per run (N = 1, 3, 5)
 create table agent_suggestions (
@@ -304,11 +382,40 @@ create table agent_suggestions (
 );
 create index agent_suggestions_plan_hash_idx on agent_suggestions (plan_hash);
 
--- All access goes through FastAPI (service role). RLS on, with no anon policies = closed to browsers.
+-- Daily LLM call counter (OpenRouter). Enforces LLM_DAILY_CALL_CAP.
+create table llm_usage (
+  day           date primary key,
+  calls         integer not null default 0 check (calls >= 0)
+);
+alter table llm_usage enable row level security;
+
+-- RLS: FastAPI and the ingest job connect via DATABASE_URL (server-side, bypasses RLS) and enforce
+-- ownership in code (run.user_id = JWT sub). Policies below are defence in depth and would allow
+-- future Supabase Realtime for owners. Everything without a policy is closed to anon/authenticated.
 alter table tracked_entries   enable row level security;
 alter table team_snapshots    enable row level security;
 alter table agent_runs        enable row level security;
 alter table agent_suggestions enable row level security;
+
+create policy "tracked_entries: read own" on tracked_entries
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy "agent_runs: read own" on agent_runs
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy "agent_suggestions: read own" on agent_suggestions
+  for select to authenticated using (exists (
+    select 1 from agent_runs r where r.id = agent_suggestions.run_id and r.user_id = (select auth.uid())));
+
+-- Reference data has no user content: enable RLS with no policies (API-only access).
+alter table seasons enable row level security;  alter table teams enable row level security;
+alter table positions enable row level security; alter table gameweeks enable row level security;
+alter table fixtures enable row level security;  alter table players enable row level security;
+alter table player_daily_snapshots enable row level security;
+alter table player_gameweek_stats enable row level security;
+alter table player_gw_points enable row level security;
+alter table player_metrics enable row level security;
+alter table entry_cache enable row level security; alter table ingest_runs enable row level security;
+alter table data_versions enable row level security;
+alter table entry_event_picks enable row level security;
 
 -- Worker claim query (reference, used by fplcore.agent):
 -- update agent_runs set status='running', started_at=now(), attempts=attempts+1, locked_by=$1

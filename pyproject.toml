@@ -1,0 +1,52 @@
+[project]
+name = "fplbud"
+version = "0.1.0"
+description = "FPLBud monorepo — FPL tactics assistant"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["fplcore", "ingest", "api"]
+
+[tool.uv.sources]
+fplcore = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "hypothesis>=6.115",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pandas-stubs>=2.2",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = ["fplcore/src", "ingest/src", "api/src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["fplcore/src", "ingest/src", "api/src", "tests", "scripts"]
+extend-exclude = ["web", "design-mocks", "samples", "backups"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "fplcore/src:ingest/src:api/src"
+packages = ["fplcore", "ingest", "api"]
+pretty = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["pulp.*", "slowapi.*", "jose.*"]
+ignore_missing_imports = true

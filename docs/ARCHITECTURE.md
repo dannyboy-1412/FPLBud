@@ -1,9 +1,9 @@
-# FPL Assistant: Architecture (v1)
+# FPLBud: Architecture (v1)
 
-**Goal of v1:** a user enters their FPL team ID, the app imports their current squad (picks, bank, chips, free transfers), and a background **team agent** straight away produces three plans: next GW, next 3 GWs and next 5 GWs. Each plan covers transfers or a roll, hits, captain and vice, XI and bench, chip advice, and reasoning. Plans are scored by custom metrics, and users can change how much each metric counts.
-**Not in v1:** squad builder, login-only features, the official "my team" endpoint.
-**Stack:** Next.js (Vercel), Python FastAPI with pandas and PuLP (Render or Fly.io), Supabase Postgres, and a GitHub Actions cron for ingestion.
-**Core principle:** the heavy work happens offline. A scheduled job ingests FPL data and precomputes each player's metric components. Each request only applies the user's weights and runs a small MILP, so it should take well under 1 second. The agent's maths is deterministic; an LLM is only an optional writer of explanations.
+**Goal of v1:** FPLBud imports an FPL squad (picks, bank, chips, free transfers) by public team ID. **Guests** get an instant next-GW suggestion using the default metrics. **Signed-in users** (Google via Supabase Auth) save their team once, and a background **team agent** straight away produces three plans: next GW, next 3 GWs and next 5 GWs. Each plan covers transfers or a roll, hits, captain and vice, XI and bench, chip advice, and reasoning. Plans are scored by custom metrics, and users can change how much each metric counts.
+**Not in v1:** squad builder, FPL account login (the official "my team" endpoint), paid tier (§2A).
+**Stack:** Next.js (Vercel), Python FastAPI with pandas and PuLP (Render or Fly.io), Supabase Postgres and Auth (Google OAuth), and a GitHub Actions cron for ingestion.
+**Core principle:** the heavy work happens offline. A scheduled job ingests FPL data and precomputes each player's metric components. Each request only applies the user's weights and runs a small MILP, so it should take well under 1 second. The agent's maths is deterministic; an LLM is only an optional writer of explanations, planned for the future paid tier.
 
 ---
 
@@ -47,35 +47,39 @@ flowchart LR
     BS[bootstrap-static] ; FX[fixtures] ; ES["element-summary/{id}"] ; EN["entry/{id}, picks, history, transfers"]
   end
   subgraph Ingest["Ingest job (GitHub Actions cron, Python)"]
-    I1[fetch + validate] --> I2[upsert raw tables] --> I3["compute metrics (pandas)"] --> I4["enqueue agent re-runs + drain queue"]
+    I1[fetch + validate] --> I2[upsert raw tables] --> I3["compute metrics (pandas)"] --> I4["enqueue agent re-runs (signed-in users) + drain queue"]
   end
-  subgraph DB["Supabase Postgres"]
+  subgraph SB["Supabase"]
+    AUTH["Auth (Google OAuth)"]
     T[(teams / players / fixtures / gameweeks)]
     S[(player_gameweek_stats / daily snapshots)]
     M[(player_metrics)]
-    Q[(team_snapshots / agent_runs = job queue / agent_suggestions)]
-    U[(tracked_entries / user_settings / entry_cache)]
+    P[(public.profiles: entry id + weights, RLS own row)]
+    Q[(tracked_entries / team_snapshots / agent_runs = queue / agent_suggestions)]
   end
   subgraph API["FastAPI (Render/Fly)"]
-    A0["POST /team/{id}/import"] ; A1["GET /agent/runs/{id}"] ; A2[POST /suggestions] ; A3[GET /players]
+    JWT["verify Supabase JWT"]
+    G["guest: POST /suggestions (N=1, default weights)"]
+    A0["POST /me/team/import"] ; A1["GET /agent/runs/{id}"] ; A3[GET /players]
     W["Team agent worker (in-process async loop)"]
-    OPT["fplcore.optimise (PuLP MILP)"] ; EXP["fplcore.explain (template | optional LLM)"]
+    OPT["fplcore.optimise (PuLP MILP)"] ; EXP["fplcore.explain (template; LLM = future paid)"]
   end
-  WEB["Next.js on Vercel"]
+  WEB["FPLBud web (Next.js on Vercel)"]
   USER((User))
 
   BS & FX & ES --> I1
   I2 --> T & S
   I3 --> M
   I4 --> Q
-  USER --> WEB --> A0 & A1 & A2 & A3
-  A0 -- "cache miss" --> EN
-  A0 -- "insert queued run" --> Q
+  USER --> WEB
+  WEB -- "Sign in with Google" --> AUTH
+  WEB -- "Bearer access token" --> JWT --> A0 & A1
+  WEB --> G & A3
+  G & A0 -- "cache miss" --> EN
+  A0 --> P & Q
   W -- "claim (SKIP LOCKED)" --> Q
   W --> OPT & EXP
-  W -- "write 3 horizon results" --> Q
   WEB -. "polls every 2 s" .-> A1
-  A1 & A2 & A3 --> DB
 ```
 
 ## 2. Components
@@ -83,13 +87,32 @@ flowchart LR
 | Component | Responsibility |
 |---|---|
 | `fplcore` (shared Python package) | FPL client (typed with pydantic, retries, throttling), metric functions, optimiser, FT and selling-price logic, the team agent (`fplcore.agent`) and the explainer (`fplcore.explain`). Used by both the ingest job and the API, so everything is tested in one place. |
-| Ingest job (`ingest/run.py`) | Fetches, validates and upserts raw data, takes daily snapshots, and recomputes `player_metrics` for the next 6 GWs. Then it enqueues agent re-runs and drains the queue itself, so re-runs happen even while the API is asleep. Logs a row in `ingest_runs`. |
-| FastAPI (`api/`) | Imports a user's team and stores a `team_snapshot`, enqueues an agent run, and serves status and results. It also handles ad-hoc `/suggestions` for slider tweaks and hosts the in-process agent worker. Stateless apart from the DB. |
-| Team agent worker | Claims queued `agent_runs` from Postgres and builds the team context. It runs the optimiser for horizons 1, 3 and 5 plus the chip checks, writes structured plans, then adds explanations (template, or LLM if configured). See §6A. |
-| Supabase | Postgres storage (which also serves as the job queue), plus optional Auth to save weights and team ID. RLS is on everywhere: the browser never reads tables directly, and all data goes through FastAPI. |
-| Next.js (`web/`) | Team ID entry, a progress view while the agent runs, three horizon tabs with the agent's plans, weight sliders, and the player explorer. |
+| Ingest job (`ingest/run.py`) | Fetches, validates and upserts raw data, takes daily snapshots, and recomputes `player_metrics` for the next 6 GWs. Then it enqueues agent re-runs for eligible signed-in users and drains the queue itself, so re-runs happen even while the API is asleep. Logs a row in `ingest_runs`. |
+| FastAPI (`api/`) | Verifies Supabase JWTs. Serves guest suggestions (stateless) and, for signed-in users, profile, team import (stores a `team_snapshot`), agent runs and results. Hosts the in-process agent worker. Stateless apart from the DB. |
+| Team agent worker | Signed-in users only. Claims queued `agent_runs` from Postgres and builds the team context. It runs the optimiser for horizons 1, 3 and 5 plus the chip checks, writes structured plans, then adds template explanations. See §6A. |
+| Supabase | Auth (Google OAuth), Postgres storage (which also serves as the job queue) and `public.profiles`. RLS is on for every table. Users can read and update only their own profile and read only their own agent rows. Everything else is closed to browsers, and FastAPI reaches it over `DATABASE_URL`. |
+| Next.js (`web/`) | FPLBud UI: guest flow, Google sign-in, onboarding (team ID), the dashboard with agent progress and three horizon tabs, settings, and the player explorer. Uses `@supabase/ssr` for the session and sends the access token to FastAPI. |
 
 Repo layout (monorepo): `web/`, `api/`, `ingest/`, `fplcore/` (`client`, `metrics`, `optimise`, `agent`, `explain`), `db/schema.sql`, `samples/` (test fixtures), `.github/workflows/ingest.yml`.
+
+## 2A. Users, auth and tiers
+
+**Sign-in.** Google OAuth goes through **Supabase Auth**. The Google client ID and secret are set in Supabase (Dashboard → Auth → Providers → Google, or `config.toml` for local `supabase` CLI). Google's authorised redirect URI is `https://<project>.supabase.co/auth/v1/callback`. FPLBud calls `supabase.auth.signInWithOAuth({provider:'google', options:{redirectTo: NEXT_PUBLIC_SITE_URL + '/auth/callback'}})`, and `/auth/callback` exchanges the code for a session. **Google login does not give access to FPL accounts.** Teams are always imported by public FPL team ID, and FPL credentials are never asked for or stored.
+
+**Profiles.** `public.profiles` has one row per `auth.users` row, created by a trigger on sign-up with the Google name and avatar. It holds `fpl_entry_id` (entered once at onboarding), saved `weights` (including optional metrics), default `horizon`/`max_hits`, `last_active_at`, `created_at` and `updated_at`. RLS lets a user select and update only their own row, and check constraints validate the values. The app writes through FastAPI, which validates the entry ID against FPL. Because of RLS, direct supabase-js access is safe too.
+
+**JWT verification in FastAPI.** A `current_user` dependency reads `Authorization: Bearer <access_token>`. It verifies the HS256 signature with `SUPABASE_JWT_SECRET` and checks `aud = "authenticated"` and `exp`, then uses `sub` as the user ID. An `optional_user` variant is used on endpoints that guests can also call. Supabase also offers asymmetric JWT signing keys. If the project uses them, verify against the project's JWKS instead; this is isolated in `api/auth.py`. Authenticated requests bump `profiles.last_active_at`, at most once per hour.
+
+| | **Guest** (no login) | **Free** (signed in with Google) |
+|---|---|---|
+| Team import | Enter a team ID each visit. Public preview only; nothing stored except the shared 5-minute cache of public FPL responses (`entry_cache`) | Team ID saved to profile once, remembered |
+| Suggestions | **Next GW only**, via `POST /suggestions`. Server forces `horizon=1` and **default weights** (custom weights are ignored) | **Team agent**: three horizons (1/3/5), chip advice, XI, bench, captain, reasoning |
+| Metrics | Defaults only (form, fixture, home/away, xGI) | Custom weights, including the optional metrics, saved to profile |
+| Background re-runs | None | Automatic re-runs after data refresh, pre-deadline and post-deadline |
+| Player explorer | ✓ (default weights) | ✓ (own weights) |
+| Rate limit | Per IP (`GUEST_RATE_LIMIT_PER_MINUTE`) | Per user (`USER_RATE_LIMIT_PER_MINUTE`), agent re-runs capped (`AGENT_RERUN_LIMIT_PER_HOUR`) |
+
+**Future paid tier (out of scope, noted only):** deadline email reminders, a multi-GW chip planner, multiple teams per account (`tracked_entries` is already keyed by (user, entry)), and LLM-written explanations (`LLMExplainer`, §6A.5).
 
 ## 3. Ingestion schedule
 
@@ -100,9 +123,9 @@ Run from GitHub Actions cron. It's free, needs no always-on server, and the regu
 | `bootstrap` | every 2 h | 1 | Upserts players, teams, gameweeks and positions. On the first run each day, also writes `player_daily_snapshots` (price, ownership, transfers). |
 | `fixtures` | every 6 h, hourly on match days | 1 | Picks up FDR changes and rescheduled or blank fixtures. |
 | `element_summaries` | daily at 03:00 UTC (14:00 AEDT), and again once `events[].data_checked` flips true after a GW | ~667 at about 3/s, roughly 4 min | Upserts `player_gameweek_stats`. Only fetch players whose `minutes` changed since the last run to cut the calls. |
-| `metrics` | after any of the above | 0 | Recomputes `player_metrics` for `computed_for_gw` = next GW … next+5, with `horizon=1`. Earlier rows are kept, which lets us calibrate later (§4.3). Bumps `data_version`. |
+| `metrics` | after any of the above | 0 | Recomputes `player_metrics` for `computed_for_gw` = next GW … next+5, with `horizon=1`. Older metric and match rows outside the rolling window are pruned. Bumps `data_version`. |
 | Pre-deadline | 2 h and 30 min before `deadline_time` | 1 + delta | Catches late injury news (`chance_of_playing_*`, `news`). |
-| `agent_rerun` | after `metrics` (only when `data_version` changed), plus the 2 h pre-deadline run, plus once after the deadline when new picks are visible | 1 entry fetch per team after the deadline only | Enqueues runs for active `tracked_entries`, then drains the queue in the same Action (§6A.4). |
+| `agent_rerun` | after `metrics` (only when `data_version` changed), plus the 2 h pre-deadline run, plus once after the deadline when new picks are visible | 1 entry fetch per tracked team after the deadline only | Enqueues runs for **signed-in users with a saved team** whose `profiles.last_active_at` is within `AGENT_TRACKING_WINDOW_DAYS` (default 30), then drains the queue in the same Action (§6A.6). |
 
 ## 4. Metrics
 
@@ -133,7 +156,7 @@ avail[p,k]= 1 − (1 − cop_p) · 0.5^(k−1)                         # cop = c
 proj[p,k] = n_fixtures[p,k] · avail[p,k] · (a_pos + b_pos · S[p,k])   # blank GW → 0, double GW → ×2
 ```
 
-`(a_pos, b_pos)` turns a score into expected points, which is needed to compare against a −4 hit. **Start with a fallback** of a=1, b=6 (S=1 is about 7 pts). Once 4 or more GWs of stored `player_metrics` exist, refit them weekly by OLS of actual points on S per position. This is why old metric rows are kept. As a sanity check, compare the correlation of `proj[p,1]` with FPL's `ep_next`.
+`(a_pos, b_pos)` turns a score into expected points, which is needed to compare against a −4 hit. **Start with a fallback** of a=1, b=6 (S=1 is about 7 pts). The live database only keeps metric rows for the next 6 gameweeks, so any later calibration uses a local export or `scripts/backtest.py`. As a sanity check, compare the correlation of `proj[p,1]` with FPL's `ep_next`.
 
 ## 5. Transfer optimisation (PuLP / CBC MILP)
 
@@ -157,7 +180,7 @@ s.t.  x_p = [p∈C] + in_p − out_p ;  in_p ≤ 1−[p∈C] ;  out_p ≤ [p∈C
 
 **Output:** separate solves with `Σ in_p` fixed at 0 (roll), 1, 2, …, up to F+H. Each comes back as a plan card showing projected gain against rolling, the transfers in and out with a per-metric breakdown (why), the captain and vice-captain (the next-best starter), and the remaining bank. About 700×6 variables solves with CBC in roughly 100–300 ms. Pre-filtering to the top 40 per position by S makes it even faster. Horizon-specific settings for the agent are in §6A.3, and chip advice is in §6A.4. If `active_chip` is wildcard or freehit, we treat F as unlimited.
 
-## 6. Team import logic (no login available)
+## 6. Team import logic (public team ID; no FPL login exists or is needed)
 
 1. `entry/{id}/` gives `current_event` (the latest started GW, here 6) and `last_deadline_bank`.
 2. `entry/{id}/event/{current_event}/picks/` gives the 15 elements and `entry_history.bank`.
@@ -168,23 +191,23 @@ s.t.  x_p = [p∈C] + in_p − out_p ;  in_p ≤ 1−[p∈C] ;  out_p ≤ [p∈C
 4. **Selling price estimate.** The purchase price is the most recent `element_in_cost` from `entry/{id}/transfers/`. If the player was held since GW1, use `now_cost − cost_change_start`. Then `sell = buy + floor((now − buy)/2)` if now > buy, else `now`. Mark this as an estimate, since the bank can also be overridden.
 5. **Caveat shown in the UI:** transfers already made for the *next* GW aren't visible until its deadline (picks return 404, my-team returns 403). The squad can be edited by hand before generating suggestions.
 
-## 6A. Team agent (runs in the background after import)
+## 6A. Team agent (signed-in users; runs in the background after import)
 
-As soon as a team is imported, the agent produces **three independent plans**: **next GW (N=1)**, **next 3 GWs (N=3)** and **next 5 GWs (N=5)**. Each plan has transfers (or a roll), any worthwhile hits, captain and vice, the starting XI and bench order, chip advice, and plain-English reasoning. **The maths is fully deterministic** (optimiser plus rules). The LLM only rewrites structured output as prose and is optional.
+**Signed-in users only.** Guests get the synchronous next-GW plan from `POST /suggestions` and never create snapshots or runs. As soon as a signed-in user saves or re-imports their team, the agent produces **three independent plans**: **next GW (N=1)**, **next 3 GWs (N=3)** and **next 5 GWs (N=5)**. Each plan has transfers (or a roll), any worthwhile hits, captain and vice, the starting XI and bench order, chip advice, and plain-English reasoning. **The maths is fully deterministic** (optimiser plus rules). The LLM only rewrites structured output as prose and is optional (future paid tier).
 
 ### 6A.1 Team context (`team_snapshots`)
 On import, §6 builds an immutable snapshot that is stored once and reused by every run:
-`{entry_id, event, picks[15], bank, value, free_transfers (est.), selling_prices{element: price} (est.), chips_available[] (current half only, with stop_event), chips_used[], active_chip, flags[] (squad players with status ≠ 'a' or chance_of_playing_next_round < 100, with news), overrides (user-edited FT/bank/squad)}`, plus a `content_hash`. A re-import with the same hash reuses the snapshot.
+`{entry_id, event, picks[15], bank, value, free_transfers (est.), selling_prices{element: price} (est.), chips_available[] (current half only, with stop_event), chips_used[], active_chip, flags[] (squad players with status ≠ 'a' or chance_of_playing_next_round < 100, with news), overrides (user-edited FT/bank/squad)}`, plus a `content_hash` and the `user_id` that created it (overrides are per user). A re-import with the same hash reuses the snapshot.
 
 ### 6A.2 How it runs asynchronously: a Postgres-backed queue (no Redis, no extra service, free)
 - **Queue = the `agent_runs` table.** Status moves `queued → running → succeeded | failed`. Rows also carry `progress` (0–100) and `stage` (`context`, `horizon_1`, `horizon_3`, `horizon_5`, `chips`, `explain`).
-- **Enqueue:** `POST /team/{id}/import` writes the snapshot, inserts a `queued` run, and returns `run_id` straight away (around 300 ms). A partial unique index allows at most one queued or running run per entry, so repeat clicks just get the existing run.
+- **Enqueue:** `PUT /me/team` or `POST /me/team/import` (JWT required) writes the snapshot, inserts a `queued` run with `user_id`, and returns `run_id` straight away (around 300 ms). A partial unique index allows at most one queued or running run per (user, entry), so repeat clicks just get the existing run.
 - **Claim:** `UPDATE agent_runs SET status='running', started_at=now(), attempts=attempts+1, locked_by=$worker WHERE id = (SELECT id FROM agent_runs WHERE status='queued' ORDER BY priority, created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`. This is safe even if two workers race.
 - **Who runs it:**
-  - (a) **In the API process.** On import, a FastAPI `BackgroundTasks` call claims and runs the job immediately. An asyncio loop started at app startup also polls every 5 s for anything left over.
+  - (a) **In the API process.** On import, a FastAPI `BackgroundTasks` call claims and runs the job immediately. An asyncio loop started at app startup also polls every `AGENT_POLL_INTERVAL_SECONDS` (5 s) for anything left over.
   - (b) **In the ingest GitHub Action.** After enqueuing re-runs, the Action drains the queue itself with the same `fplcore.agent`. This means the free Render instance can be asleep and re-runs still happen.
   - There's no Celery or Redis. If load ever grows, a dedicated worker can run the same loop.
-- **Reliability:** if a run has been `running` for more than 5 min, it goes back to `queued` (up to 3 attempts), then to `failed` with the `error` text. The worker is idempotent: it deletes and rewrites `agent_suggestions` for that run in one transaction.
+- **Reliability:** if a run has been `running` for more than `AGENT_JOB_TIMEOUT_SECONDS` (300 s), it goes back to `queued` (up to `AGENT_MAX_ATTEMPTS` = 3), then to `failed` with the `error` text. The worker is idempotent: it deletes and rewrites `agent_suggestions` for that run in one transaction.
 - **Expected runtime:** a few seconds. Each horizon is about 3–6 MILP solves at 100–300 ms each, the chip checks add 3 solves, and the optional LLM call adds 2–6 s.
 
 ### 6A.3 Horizons and the optimiser
@@ -215,63 +238,104 @@ Each tip is `{chip, recommend: play_now | consider_gw_X | hold, expected_gain, r
 - The agent writes a **structured result** per horizon: transfers with per-metric score deltas, `proj` gain against rolling, hit maths, captain choice and margin, flags affecting the plan, chip tips, and `reason_codes` (for example `FLAG_INJURED_OUT`, `FIXTURE_SWING`, `XGI_UPGRADE`, `HIT_NOT_WORTH`).
 - `Explainer` interface: `explain(result: HorizonResult) -> str`.
   - **`TemplateExplainer` (default, always available, free).** It builds sentences from the reason codes and numbers. For example (illustrative): *"Sell Saka (75% chance of playing, tough away games) for Palmer (+1.8 projected over 3 GWs, top-10% expected stats). Rolling instead is worth less. Captain Haaland, 1.9 pts ahead of Palmer."*
-  - **`LLMExplainer` (optional).** Set `EXPLAINER=llm` plus a provider key; it works with any OpenAI-compatible endpoint. It makes **one call per run** covering all 3 horizons, with JSON in and JSON out (about 2k input and 600 output tokens). The prompt says to only use names and numbers from the input. Afterwards we check that every player name and number in the output appears in the input; on failure, a timeout of more than 10 s, or a missing key, it falls back to the template. The output is stored with `explanation_source`.
-  - **Cost:** a small model at this token count costs a fraction of a cent per run. Some providers have free API tiers, but their limits and terms change, so check them at deploy time. To control cost, the LLM is used only for user-triggered runs, and background re-runs reuse the stored text when the `plan_hash` hasn't changed (otherwise they use the template). There's a daily call cap via env var.
+  - **`LLMExplainer` (optional; planned for the future paid tier, off for Free).** Enabled with `LLM_ENABLED=true` and `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL`; it works with any OpenAI-compatible endpoint. It makes **one call per run** covering all 3 horizons, with JSON in and JSON out (about 2k input and 600 output tokens). The prompt says to only use names and numbers from the input. Afterwards we check that every player name and number in the output appears in the input; on failure, a timeout longer than `LLM_TIMEOUT_SECONDS`, or a missing key, it falls back to the template. The output is stored with `explanation_source`.
+  - **Cost:** a small model at this token count costs a fraction of a cent per run. Some providers have free API tiers, but their limits and terms change, so check them at deploy time. To control cost, the LLM is used only for user-triggered runs, and background re-runs reuse the stored text when the `plan_hash` hasn't changed (otherwise they use the template). There's a daily call cap (`LLM_DAILY_CALL_CAP`).
 
 ### 6A.6 When it re-runs (`trigger` column)
 
 | Trigger | What happens |
 |---|---|
-| `import` | Import or re-import. If the snapshot hash, weights and `data_version` all match the latest successful run, that run is returned and nothing new is queued. |
-| `user_rerun` | The user changed weights or overrides and pressed "Re-run agent". |
-| `data_refresh` | After a `metrics` ingest with a new `data_version`, for every `tracked_entries` row with `last_seen_at` in the last 14 days. Low priority, and capped per Action run. |
+| `import` | Onboarding, team change or re-import (signed in). If the snapshot hash, weights and `data_version` all match the latest successful run, that run is returned and nothing new is queued. |
+| `user_rerun` | The user saved new weights in settings or pressed "Re-run agent" (capped by `AGENT_RERUN_LIMIT_PER_HOUR`). |
+| `data_refresh` | After a `metrics` ingest with a new `data_version`, for every signed-in user with a saved team (`tracked_entries`) and `profiles.last_active_at` within `AGENT_TRACKING_WINDOW_DAYS` (default 30; inactive users are skipped to save compute and resume on their next visit). Uses the weights saved on the profile. Low priority, and capped per Action run. |
 | `pre_deadline` | 2 h before the deadline, after the pre-deadline ingest, so injury news is included. |
 | `post_deadline` | After the deadline, the entry is re-fetched (new picks are now visible), a new snapshot is made, and the agent runs. |
 
 ### 6A.7 How the frontend shows progress
-**Polling** `GET /agent/runs/{run_id}` every 2 s (backing off to 5 s, stopping at `succeeded`/`failed` or after 2 min). It shows a step indicator driven by `stage`/`progress`, then three tabs. We chose polling over Supabase Realtime because it needs no browser access to tables (RLS stays closed, which matters for anonymous users) and it's simpler. Realtime can be added later for signed-in users. When a newer successful run exists than the one on screen, the page shows a "Plans updated (injury news / data refresh)" banner.
+**Polling** `GET /agent/runs/{run_id}` (with the Bearer token) every 2 s (backing off to 5 s, stopping at `succeeded`/`failed` or after 2 min). It shows a step indicator driven by `stage`/`progress`, then three tabs. We chose polling over Supabase Realtime because it's simpler and keeps the API as the single read path. The owner-only RLS select policies on `agent_runs` and `agent_suggestions` mean Realtime could be switched on later without schema changes. When a newer successful run exists than the one on screen, the page shows a "Plans updated (injury news / data refresh)" banner.
 
 ## 7. FastAPI endpoints
 
-| Method & path | Purpose |
-|---|---|
-| `GET /health` | liveness check, plus the last successful `ingest_runs` time and queue depth |
-| `GET /meta` | current/next GW, deadline, default weights, metric descriptions, game settings, `data_version` |
-| `POST /team/{entry_id}/import` | body `{weights?, overrides?:{free_transfers, bank, squad[15]}}`. Fetches from FPL (5-minute cache), stores a `team_snapshot`, upserts `tracked_entries`, and enqueues an agent run. **Returns `202 {snapshot, run_id, status}`**, where snapshot covers picks, bank, FT, selling prices, chips and flags. |
-| `GET /team/{entry_id}` | latest snapshot plus `latest_run_id` (no FPL call) |
-| `GET /agent/runs/{run_id}` | `{status, stage, progress, error?, created_at, finished_at, data_version, results?:{"1":HorizonPlan,"3":…,"5":…}}` |
-| `GET /team/{entry_id}/agent/latest` | latest successful run with results |
-| `POST /team/{entry_id}/agent/rerun` | body `{weights?, overrides?}`, returns `202 {run_id}` (rate-limited) |
-| `POST /internal/agent/drain` | header `X-Cron-Secret`; optional manual or cron trigger to process the queue |
-| `POST /suggestions` | synchronous single-horizon optimiser for instant slider previews. Body `{entry_id, weights, horizon:1-6, max_hits, overrides?, lock_ids?, exclude_ids?}` |
-| `GET /players?position=&team=&max_cost=&weights=&horizon=` | player list ranked by S (the explorer page, also useful for debugging) |
-| `GET /players/{id}` | metric breakdown per upcoming GW, plus recent match history |
+Auth: **Public** = anyone, rate-limited by IP. **Optional** = guest behaviour unless a valid JWT is sent. **User** = a valid Supabase JWT is required (401 otherwise). **Internal** = `X-Internal-Secret: INTERNAL_API_SECRET`.
 
-`HorizonPlan = {horizon, transfers:[{out,in,cost_delta,metric_deltas}], hits, gain_vs_roll, roll_alternative, xi[11], bench[4] (ordered), captain, vice, chips:[ChipTip], flags, reason_codes, projected_points_by_gw, explanation, explanation_source}`.
-Validate with pydantic, cap request rates per IP with slowapi (import and rerun capped at 6/min), and set CORS to the Vercel domain.
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /health` | Public | liveness check, plus the last successful `ingest_runs` time and queue depth |
+| `GET /meta` | Public | current/next GW, deadline, default weights, metric descriptions, game settings, `data_version` |
+| `GET /public/team/{entry_id}` | Public | guest preview: squad, bank, estimated FT and selling prices, chips and flags. Uses `entry_cache` only; nothing stored |
+| `POST /suggestions` | Optional | Guests get body `{entry_id, overrides?}` with **horizon 1 and default weights enforced server-side** (client values ignored). Signed-in users can also send `{weights, horizon:1-6, max_hits, lock_ids, exclude_ids}` for instant slider previews. Synchronous. |
+| `GET /players?position=&team=&max_cost=&horizon=` | Optional | ranked player list; default weights for guests, profile weights (or `weights=` query) for users |
+| `GET /players/{id}` | Public | metric breakdown per upcoming GW, plus recent match history |
+| `GET /stats/market` | Public | top transfers in/out this GW, 24h net movers, price risers/fallers, estimated price pressure |
+| `GET /stats/insights?position=` | Optional | in-form, finishing variance, differentials, defensive contributions, bonus, set-piece takers. Default weights for guests, profile weights for users |
+| `GET /me/stats/squad` | User | captaincy board (next-GW proj), template threats, squad differentials, ownership profile. Uses the latest snapshot; no FPL call |
+| `GET /me/stats/season` | User | GW history vs average, rank, bench points, hits, captain returns vs the crowd. First load fetches missing finished-GW picks (cached in `entry_event_picks`) |
+| `GET /me` | User | profile (entry ID, weights, defaults) plus latest snapshot and `latest_run_id` |
+| `PUT /me` | User | update weights, horizon and hit defaults. Changing weights enqueues a `user_rerun` |
+| `PUT /me/team` | User | body `{entry_id}`. Validates against FPL `entry/{id}`, saves it to the profile, upserts `tracked_entries`, then imports as below |
+| `POST /me/team/import` | User | body `{overrides?:{free_transfers, bank, squad[15]}}`. Fetches from FPL (5-minute cache), stores a `team_snapshot`, and enqueues an agent run. **Returns `202 {snapshot, run_id, status}`** |
+| `POST /me/agent/rerun` | User | returns `202 {run_id}` (capped by `AGENT_RERUN_LIMIT_PER_HOUR`) |
+| `GET /me/agent/latest` | User | latest successful run with all three horizon results |
+| `GET /agent/runs/{run_id}` | User | `{status, stage, progress, error?, created_at, finished_at, data_version, results?:{"1":HorizonPlan,"3":…,"5":…}}`. Returns 404 unless `run.user_id = sub` |
+| `DELETE /me` | User | deletes the account: the auth user via the service role admin API, then everything cascades |
+| `POST /internal/agent/drain` | Internal | optional manual or cron trigger to process the queue |
 
-## 8. Frontend pages (Next.js App Router, Tailwind and shadcn/ui)
+`HorizonPlan = {horizon, transfers:[{out,in,cost_delta,metric_deltas}], hits, gain_vs_roll, roll_alternative, xi[11], bench[4] (ordered), captain, vice, chips:[ChipTip], flags, reason_codes, projected_points_by_gw, explanation, explanation_source}`. The guest `POST /suggestions` returns the same shape for N=1 (without chip advice).
+Validate with pydantic, rate-limit with slowapi (per IP for guests, per `sub` for users), and set CORS from `CORS_ALLOWED_ORIGINS`.
 
-- `/`: team ID input, with help on finding it (the number in the URL of the FPL "Points" page). Submitting calls `/import` and goes to the team page with `?run=`.
-- `/team/[id]`:
-  - The pitch view and context panel (bank, FT, chips, flagged players) render straight away from the snapshot.
-  - The **agent panel** shows progress steps while polling, then **three tabs: Next GW / Next 3 / Next 5**. Each tab shows the transfer cards (or "Roll"), hit maths, the XI and bench on the pitch, captain and vice badges, chip tips and the explanation.
-  - A sidebar has weight sliders, toggles, and FT/bank/squad overrides. Previews call `/suggestions`, and "Re-run agent" calls `/agent/rerun`.
-  - Weights are saved to localStorage, or to `user_settings` when signed in.
-- `/players`: sortable explorer using the same weights.
-- `/how-it-works`: metric formulas, horizon and hit rules, and chip thresholds in plain English. This builds trust and helps the portfolio.
+## 8. Frontend pages (Next.js App Router, Tailwind, shadcn/ui, `@supabase/ssr`)
+
+- `/` (landing): FPLBud pitch, a team ID input for guests (with help on finding it: the number in the URL of the FPL "Points" page), and a **Sign in with Google** button.
+- `/try/[entryId]` (guest): squad on the pitch from `/public/team`, plus the **Next GW** plan from `/suggestions` (default metrics). The **Next 3 / Next 5 tabs are rendered blurred** with an overlay: *"Sign in with Google to unlock your 5-week plan"*. Weight sliders are shown disabled with the same call to action.
+- `/login` and `/auth/callback`: Google OAuth through Supabase. New users are sent to onboarding.
+- `/onboarding` (user): enter the FPL team ID once. It's validated with a preview of the manager and team name, then saved with `PUT /me/team`, and the agent starts.
+- `/dashboard` (user): pitch view and context panel (bank, FT, chips, flagged players), then **section tabs: Plans / My squad / My season / Market / Insights** (`?section=`). **Plans** keeps the agent panel with progress steps while polling, then **three horizon tabs: Next GW / Next 3 / Next 5**. Each plan tab shows transfer cards (or "Roll"), hit maths, XI and bench, captain and vice, chip tips and the explanation. There's a "Plans updated" banner when a background re-run finishes, and a "Re-run agent" button. **Market** is top transfers in/out, 24h movers, price risers/fallers and estimated price pressure (labelled as an estimate: FPL does not publish the algorithm). **My squad** is the captaincy board, template threats and differentials. **My season** is GW points vs average, rank, bench, hits and captain returns. **Insights** is form, finishing variance, DC hit rate, bonus and set pieces. Player lists mark "you own" from the squad on the page, so the public market/insights payloads stay cacheable.
+- `/settings` (user): metric weights and optional-metric toggles (saved to the profile), default horizon and max hits, changing the FPL team ID, sign out, and delete account.
+- `/players`: explorer (profile weights when signed in).
+- `/how-it-works`: metric formulas, horizon and hit rules, and chip thresholds in plain English.
+
+Next.js middleware redirects `/onboarding`, `/dashboard` and `/settings` to `/login` when there's no session. A signed-in user without `fpl_entry_id` is sent to `/onboarding`.
 
 ## 9. Build plan (solo, part-time)
 
 | Milestone | Deliverable | Done when |
 |---|---|---|
-| **M0 Setup** (2–3 days) | Monorepo, Supabase project, `schema.sql` applied, `.env` handling | Tables exist and the Python client can connect |
+| **M0 Setup** (2–3 days) | Monorepo, Supabase project, `schema.sql` applied, `.env` loading (§10) | Tables exist and the Python client can connect |
 | **M1 Data pipeline** (1 week) | `fplcore.client` with pydantic models and string→number casting, ingest for bootstrap, fixtures and element-summary, the GitHub Actions cron, `ingest_runs` and `data_version` | DB refreshes on schedule unattended, and tests pass against `samples/*.json` |
 | **M2 Metrics** (1 week) | `fplcore.metrics` computing all 7 components for the next 6 GWs, plus `GET /players` | Top players per position look sensible, and `proj` correlates with `ep_next` |
-| **M3 Team import** (3–4 days) | FT, selling-price and flag logic, `team_snapshots`, `POST /team/{id}/import`, `GET /team/{id}` | Tests pass for the sample entry (FT=1 for GW7) and the 404 case |
-| **M4 Optimiser** (1 week) | `fplcore.optimise` with horizon settings (§6A.3) and `POST /suggestions` | Every plan satisfies the constraints (property tests), and requests take under 1 s |
-| **M5 Team agent** (1 week) | `agent_runs` queue (claim with SKIP LOCKED, retry and stale-run handling), the in-process worker and BackgroundTasks kick-off, three horizon plans, XI/bench/captain, `TemplateExplainer`, the status endpoints | Importing the sample team gives three plans in under 10 s, and killing the worker mid-run still ends in a finished run after retry |
-| **M6 Frontend + deploy** (1–2 weeks) | Pages from §8 with polling and horizon tabs, deployed to Vercel, API on Render/Fly | End-to-end works on a real team ID |
-| **M7 Agent extras + polish** | Chip advice (§6A.4), `LLMExplainer` with validation and fallback, cron re-runs (`data_refresh`/`pre_deadline`/`post_deadline`), backtest to tune margins and a/b calibration, auth-saved settings | Re-runs happen with no user action, and the LLM can be switched off without losing anything |
+| **M3 Team import** (3–4 days) | FT, selling-price and flag logic, `GET /public/team/{id}`, snapshot builder | Tests pass for the sample entry (FT=1 for GW7) and the 404 case |
+| **M4 Optimiser + guest flow** (1 week) | `fplcore.optimise` with horizon settings (§6A.3), and `POST /suggestions` with guest enforcement plus IP rate limit. Minimal `/` and `/try/[id]` pages | A guest gets a valid next-GW plan in under 1 s, and property tests pass for the constraints |
+| **M5 Auth + profiles** (4–5 days) | Google provider in Supabase, `profiles` with trigger and RLS, `api/auth.py` JWT dependency, `/me` endpoints, `/login`, `/auth/callback`, `/onboarding`, middleware | Sign in → enter team ID → it's remembered on the next visit. One user can't read another's profile or runs (RLS and API tests) |
+| **M6 Team agent** (1 week) | `agent_runs` queue (claim with SKIP LOCKED, retry and stale-run handling), the in-process worker and BackgroundTasks kick-off, three horizon plans, XI/bench/captain, `TemplateExplainer`, `/me/team/import`, `/agent/runs/{id}` | After onboarding, three plans appear in under 10 s, and a killed worker still ends in a finished run after retry |
+| **M7 Dashboard + deploy** (1–2 weeks) | `/dashboard` with polling and horizon tabs, `/settings`, blurred guest tabs, deployed to Vercel, API on Render/Fly, Sentry | End-to-end works for both a guest and a signed-in user on a real team ID |
+| **M8 Agent extras + polish** | Chip advice (§6A.4), cron re-runs (`data_refresh`/`pre_deadline`/`post_deadline`) with the inactivity cutoff, backtest to tune margins and a/b calibration | Re-runs happen with no user action, and inactive users are skipped |
 
-**First milestone after setup is still M1.** Get reliable, scheduled, typed data into Postgres before writing any metric, agent or UI code.
+**First milestone after setup is still M1.** Get reliable, scheduled, typed data into Postgres before writing any metric, agent or UI code. Auth (M5) comes after guest value works (M4) and before the agent (M6), because the agent is signed-in only.
+
+## 10. Configuration (`.env`)
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `APP_ENV` | all | `development` / `production` (log level, strictness) |
+| `NEXT_PUBLIC_SITE_URL` | web | base URL, used for the OAuth `redirectTo` |
+| `NEXT_PUBLIC_API_URL` | web | FastAPI base URL |
+| `CORS_ALLOWED_ORIGINS` | api | comma-separated allowed origins |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | web | Supabase client (auth session; RLS-limited) |
+| `SUPABASE_SERVICE_ROLE_KEY` | api | admin actions only (deleting users). **Never exposed to the browser** |
+| `SUPABASE_JWT_SECRET` | api | verifying user access tokens |
+| `DATABASE_URL` | api, ingest | Supavisor transaction-mode pooler (port 6543). Bypasses RLS; server-side only |
+| `DB_POOL_MIN_SIZE`, `DB_POOL_MAX_SIZE` | api | Client-side psycopg pool (default 1–8) so free-tier connection limits hold |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Supabase config | entered in the Supabase Google provider (or `config.toml` locally); not read by app code |
+| `FPL_API_BASE_URL`, `FPL_REQUEST_TIMEOUT_SECONDS`, `FPL_MAX_REQUESTS_PER_SECOND` | fplcore | FPL client (base URL `https://fantasy.premierleague.com/api`, throttle about 3/s) |
+| `INTERNAL_API_SECRET` | api, GitHub Actions | `X-Internal-Secret` header for `/internal/*` |
+| `AGENT_POLL_INTERVAL_SECONDS` | api worker | queue poll interval (default 5) |
+| `AGENT_JOB_TIMEOUT_SECONDS` | worker | a running job older than this is requeued (default 300) |
+| `AGENT_MAX_ATTEMPTS` | worker | retries before `failed` (default 3) |
+| `AGENT_TRACKING_WINDOW_DAYS` | ingest | background re-runs only for users active within N days (default 30) |
+| `LLM_ENABLED`, `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT_SECONDS`, `LLM_DAILY_CALL_CAP` | explain | `LLMExplainer` (default `LLM_ENABLED=false`; future paid tier) |
+| `SENTRY_DSN` | api, web, ingest | error tracking (optional) |
+| **New:** `GUEST_RATE_LIMIT_PER_MINUTE` | api | per-IP limit for public endpoints (suggested 10) |
+| **New:** `USER_RATE_LIMIT_PER_MINUTE` | api | per-user limit for `/me*` and `/suggestions` (suggested 30) |
+| **New:** `AGENT_RERUN_LIMIT_PER_HOUR` | api | manual re-runs and weight-change re-runs per user (suggested 6) |
+
+The GitHub Actions ingest workflow needs `DATABASE_URL`, `FPL_*`, `AGENT_*` and `SENTRY_DSN` as repository secrets.

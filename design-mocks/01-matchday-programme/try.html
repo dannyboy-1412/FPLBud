@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview · Matchday Programme</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/try.html" aria-current="page">01 Programme</a>
+    <a href="../02-floodlight/try.html">02 Floodlight</a>
+    <a href="../03-blueprint/try.html">03 Blueprint</a>
+    <a href="../04-sticker-album/try.html">04 Stickers</a>
+    <a href="../05-quant-desk/try.html">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html" aria-current="page">Guest</a>
+  </div>
+  <div class="page">
+    <header class="masthead">
+      <a class="wordmark" href="landing.html">FPL<em>Bud</em><span class="dot">.</span></a>
+      <div class="edition kicker">Gameweek 7 · Deadline Fri 17 Oct, 21:00<span class="countdown">2d 14h 06m</span></div>
+      <nav><a class="btn-text" href="#">Sign in</a></nav>
+    </header>
+    <div class="double-rule"></div>
+    <p class="kicker">Preview edition</p>
+    <h1>Danny’s XI</h1>
+    <p class="caption" style="margin-bottom:24px;">Danny · overall 184,201</p>
+
+    <div data-tabs>
+      <div class="horizon" role="tablist">
+        <button role="tab" id="tab-1" aria-selected="true" aria-controls="g1">Next GW</button>
+        <button role="tab" id="tab-3" aria-selected="false" aria-controls="g3" tabindex="-1">Next 3 🔒</button>
+        <button role="tab" id="tab-5" aria-selected="false" aria-controls="g5" tabindex="-1">Next 5 🔒</button>
+      </div>
+      <div role="tabpanel" id="g1" aria-labelledby="tab-1">
+        <p class="kicker">Next gameweek · Default criteria</p>
+        <h2>Sell Saka, buy Palmer</h2>
+        <div class="stat-row">
+          <div><div class="stat-xl gain">+2.1</div><p class="caption">projected points vs rolling</p></div>
+          <div><div class="stat">No hit</div></div>
+        </div>
+      </div>
+      <div role="tabpanel" id="g3" aria-labelledby="tab-3" hidden>
+        <div class="criteria" style="min-height:280px;">
+          <div style="filter:blur(6px)">
+            <h2>Sell Saka, buy Palmer</h2>
+            <div class="stat-xl gain">+6.4</div>
+            <p>Palmer in, Saka out. Captain Haaland. Bench Boost in play.</p>
+          </div>
+          <div class="lock-overlay">
+            <div class="notice">
+              <p class="kicker">Members’ edition</p>
+              <h2>Your 5-week plan is one sign-in away</h2>
+              <p class="caption">Sign in with Google to unlock your 5-week plan.</p>
+              <button class="btn btn-google" type="button" style="margin-top:16px;">Sign in with Google</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div role="tabpanel" id="g5" aria-labelledby="tab-5" hidden>
+        <div class="criteria" style="min-height:280px;">
+          <div style="filter:blur(6px)"><div class="stat-xl">+9.0</div></div>
+          <div class="lock-overlay">
+            <div class="notice">
+              <p class="kicker">Members’ edition</p>
+              <h2>Your 5-week plan is one sign-in away</h2>
+              <button class="btn btn-google" type="button" style="margin-top:16px;">Sign in with Google</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="double-rule section-gap"></div>
+    <p class="kicker">Selection criteria</p>
+    <div class="criteria">
+      <div class="share-bar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="metric"><span>Form</span><input type="range" value="30" disabled /><span class="stat" style="font-size:1.1rem">30%</span></div>
+      <div class="metric"><span>Fixtures</span><input type="range" value="25" disabled /><span class="stat" style="font-size:1.1rem">25%</span></div>
+      <div class="metric"><span>Home / away</span><input type="range" value="10" disabled /><span class="stat" style="font-size:1.1rem">10%</span></div>
+      <div class="metric"><span>Expected stats</span><input type="range" value="35" disabled /><span class="stat" style="font-size:1.1rem">35%</span></div>
+      <div class="lock-overlay">
+        <div class="notice">
+          <p class="caption">Sign in with Google to set your own criteria.</p>
+          <button class="btn btn-primary" type="button" style="margin-top:12px;">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="../_tabs.js"></script>
+</body>
+</html>

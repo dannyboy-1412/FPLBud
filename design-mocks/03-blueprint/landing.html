@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FPLBud · Blueprint</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/landing.html">01 Programme</a>
+    <a href="../02-floodlight/landing.html">02 Floodlight</a>
+    <a href="../03-blueprint/landing.html" aria-current="page">03 Blueprint</a>
+    <a href="../04-sticker-album/landing.html">04 Stickers</a>
+    <a href="../05-quant-desk/landing.html">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html" aria-current="page">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html">Guest</a>
+  </div>
+  <div class="page">
+    <header class="hdr">
+      <a class="wordmark" href="landing.html">FPLBUD<small>REV.1</small></a>
+      <nav class="label">
+        <a href="dashboard.html">Desk</a>
+        <a href="#">Players</a>
+        <a href="#">Docs</a>
+      </nav>
+      <div class="deadline">GW07 DEADLINE  T−2D 14:06 <a href="#" class="label" style="margin-left:12px;">Sign in</a></div>
+    </header>
+
+    <section class="hero-draw">
+      <div class="pitch-plan">
+        <span class="label dim" style="left:-8px;top:40%;writing-mode:vertical-rl;">105 m</span>
+        <span class="label dim" style="bottom:-18px;left:40%;">68 m</span>
+        <span class="label" style="position:absolute;top:48%;left:42%;">Halfway</span>
+        <svg viewBox="0 0 200 300" width="100%" height="100%" fill="none" stroke="#F1F4EE" stroke-width="1.2" aria-hidden="true">
+          <rect x="8" y="8" width="184" height="284"/>
+          <line x1="8" y1="150" x2="192" y2="150"/>
+          <circle cx="100" cy="150" r="28"/>
+          <path d="M40 90 C 80 70, 140 110, 160 80" stroke="#FF6A1F" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="marker-lg" style="position:absolute;top:18%;left:12%;">Sell Saka → Palmer</span>
+      </div>
+      <div class="title-block" style="max-width:640px;width:100%;margin-top:24px;">
+        <div class="span2"><span class="k label">Project</span><h1 class="title" style="font-size:1.75rem;">FPL, drawn to scale.</h1></div>
+        <div><span class="k label">Sheet</span><span class="mono">00 / COVER</span></div>
+        <div class="span2" style="grid-column:1/-1;"><span class="k label">Notes</span>Import your team and get transfers, captain and chips, with all the working shown.</div>
+      </div>
+      <form action="try.html" class="id-wrap" style="width:min(560px,100%);margin-top:24px;">
+        <label class="label" for="id">Entry ID</label>
+        <div style="display:flex;">
+          <input id="id" name="id" value="1234567" />
+          <button class="btn btn-primary" type="submit">Import →</button>
+        </div>
+        <div class="ruler"></div>
+        <p class="mono" style="font-size:12px;color:var(--linework-dim);">fantasy.premierleague.com/entry/<span class="marker">1234567</span>/event/6 — <em class="marker">this number</em></p>
+      </form>
+      <p><button class="btn btn-secondary" type="button">Sign in with Google</button></p>
+      <p class="label" style="color:var(--linework-faint)">for 3- and 5-week plans and your own weights</p>
+    </section>
+
+    <p class="h2">The method</p>
+    <div class="method">
+      <div class="panel ticks"><span class="corner-bl"></span><span class="corner-br"></span><p class="label">01 Ingest</p><p class="eq">FPL API → Postgres</p></div>
+      <div class="panel ticks"><span class="corner-bl"></span><span class="corner-br"></span><p class="label">02 Score</p><p class="eq">S = Σ wᵢ · scoreᵢ / Σ wᵢ</p></div>
+      <div class="panel ticks"><span class="corner-bl"></span><span class="corner-br"></span><p class="label">03 Optimise</p><p class="eq">max proj − 4h</p></div>
+    </div>
+  </div>
+</body>
+</html>

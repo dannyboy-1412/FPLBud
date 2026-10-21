@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview · Quant Desk</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/try.html">01 Programme</a>
+    <a href="../02-floodlight/try.html">02 Floodlight</a>
+    <a href="../03-blueprint/try.html">03 Blueprint</a>
+    <a href="../04-sticker-album/try.html">04 Stickers</a>
+    <a href="../05-quant-desk/try.html" aria-current="page">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html" aria-current="page">Guest</a>
+  </div>
+  <div class="desk" style="grid-template-rows: 36px 1fr 24px;">
+    <header class="ticker">
+      <span class="wordmark">fplbud</span>
+      <span class="mono">PREVIEW · DANNY’S XI · DANNY</span>
+      <span class="search dim">Search… <kbd>⌘K</kbd></span>
+      <button class="btn btn-primary" type="button">Sign in</button>
+    </header>
+    <div class="left">
+      <section>
+        <p class="pane-head">Lineup · GW07 · 3-5-2</p>
+        <div class="band"><div class="cell"><span class="pos">MF</span>PALMER +IN</div><div class="cell c"><span class="pos">FW</span>HAALAND C</div></div>
+      </section>
+      <section>
+        <p class="pane-head">Portfolio</p>
+        <div class="kv"><span>BANK</span><span>£1.4m ~</span><span>FT</span><span>1 ~</span></div>
+      </section>
+      <section>
+        <p class="pane-head">Parameters</p>
+        <p class="data amber">READ-ONLY · default parameters · Sign in with Google to edit</p>
+      </section>
+    </div>
+    <div class="plan-pane focused" data-tabs style="position:relative;">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="h1" aria-selected="true" aria-controls="p1"><kbd>1</kbd> NEXT GW <span class="up">+2.1</span></button>
+        <button role="tab" id="h3" aria-selected="false" aria-controls="p3" tabindex="-1"><kbd>3</kbd> 🔒</button>
+        <button role="tab" id="h5" aria-selected="false" aria-controls="p5" tabindex="-1"><kbd>5</kbd> 🔒</button>
+      </div>
+      <div class="body">
+        <div role="tabpanel" id="p1" aria-labelledby="h1"><div class="pnl">+2.1</div><table class="dense"><tr><th>SIDE</th><th>PLAYER</th></tr><tr><td class="down">SELL</td><td>Saka</td></tr><tr><td class="up">BUY</td><td>Palmer</td></tr></table></div>
+        <div role="tabpanel" id="p3" aria-labelledby="h3" hidden>
+          <div class="lock"><div class="pnl">+6.4</div><table class="dense"><tr><th>SIDE</th><th>PLAYER</th></tr><tr><td>SELL</td><td>Saka</td></tr></table></div>
+          <div class="overlay">
+            <div class="box">
+              <p class="pane-head">Restricted · multi-GW plans</p>
+              <p>Sign in with Google to unlock your 5-week plan.</p>
+              <button class="btn btn-primary" type="button">[Enter] Sign in with Google</button>
+            </div>
+          </div>
+        </div>
+        <div role="tabpanel" id="p5" aria-labelledby="h5" hidden>
+          <div class="overlay"><div class="box"><p class="pane-head">Restricted</p><button class="btn btn-primary" type="button">Sign in</button></div></div>
+        </div>
+      </div>
+    </div>
+    <footer class="status"><span>RANKED BY: default parameters · sign in to customise</span><span><kbd>?</kbd></span></footer>
+  </div>
+  <script src="../_tabs.js"></script>
+</body>
+</html>

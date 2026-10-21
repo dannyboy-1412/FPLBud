@@ -1,0 +1,50 @@
+name: ingest
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+    - cron: "0 */6 * * *"
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job to run"
+        default: "all"
+        type: choice
+        options: [all, bootstrap, fixtures, element_summaries, metrics, agent_rerun, drain]
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --all-packages
+      - name: Run job
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          FPL_API_BASE_URL: https://fantasy.premierleague.com/api
+          FPL_MAX_REQUESTS_PER_SECOND: "3"
+          AGENT_TRACKING_WINDOW_DAYS: "30"
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          JOB="${{ github.event.inputs.job }}"
+          if [ -z "$JOB" ]; then
+            MINUTE=$(date -u +%M)
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" = "03" ]; then
+              uv run python -m ingest.run all
+              uv run python -m ingest.run agent_rerun --trigger data_refresh
+            elif [ $((10#$HOUR % 6)) -eq 0 ]; then
+              uv run python -m ingest.run bootstrap
+              uv run python -m ingest.run fixtures
+              uv run python -m ingest.run metrics
+            else
+              uv run python -m ingest.run bootstrap
+            fi
+          else
+            uv run python -m ingest.run "$JOB"
+          fi

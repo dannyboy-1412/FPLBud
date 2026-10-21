@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview · Sticker Album</title>
+  <link rel="stylesheet" href="../_compare.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@500;700&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="compare-bar">
+    <strong><a href="../index.html">All directions</a></strong>
+    <a href="../01-matchday-programme/try.html">01 Programme</a>
+    <a href="../02-floodlight/try.html">02 Floodlight</a>
+    <a href="../03-blueprint/try.html">03 Blueprint</a>
+    <a href="../04-sticker-album/try.html" aria-current="page">04 Stickers</a>
+    <a href="../05-quant-desk/try.html">05 Quant</a>
+    <span class="sep">·</span>
+    <a href="landing.html">Landing</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="try.html" aria-current="page">Guest</a>
+  </div>
+  <div class="page">
+    <header class="hdr">
+      <a class="wordmark" href="landing.html">FPLBud</a>
+      <div class="ticket">GW7 DEADLINE · 2d 14h 06m</div>
+      <a class="btn btn-primary" href="#">Sign in</a>
+    </header>
+    <p class="tag" style="margin-top:24px;">Preview</p>
+    <h1 class="h1">Danny’s XI</h1>
+    <p style="color:var(--ink-soft)">Danny</p>
+    <div data-tabs style="margin-top:24px;">
+      <div class="folder" role="tablist">
+        <button role="tab" id="t1" aria-selected="true" aria-controls="p1">Next GW <span class="gain-pill">+2.1</span></button>
+        <button role="tab" id="t3" aria-selected="false" aria-controls="p3" tabindex="-1">Next 3 · SEALED</button>
+        <button role="tab" id="t5" aria-selected="false" aria-controls="p5" tabindex="-1">Next 5 · SEALED</button>
+      </div>
+      <div role="tabpanel" id="p1" aria-labelledby="t1" class="plan"><h2 class="h2">One swap, no hit</h2><div class="gain-box"><div class="num-xl">+2.1</div></div></div>
+      <div role="tabpanel" id="p3" aria-labelledby="t3" hidden class="plan locked">
+        <div style="filter:blur(7px)"><div class="num-xl">+6.4</div></div>
+        <div class="scrim">
+          <div>
+            <div class="pack">FPLBud<br>5-WEEK PLAN</div>
+            <h2 class="h2" style="text-align:center;margin-top:12px;">Unlock your 5-week plan</h2>
+            <p style="text-align:center;">Sign in with Google to unlock your 5-week plan.</p>
+            <p style="text-align:center;"><button class="btn btn-primary" type="button">Sign in with Google</button></p>
+          </div>
+        </div>
+      </div>
+      <div role="tabpanel" id="p5" aria-labelledby="t5" hidden class="plan locked">
+        <div class="scrim"><div class="pack">FPLBud<br>5-WEEK PLAN</div></div>
+      </div>
+    </div>
+  </div>
+  <script src="../_tabs.js"></script>
+</body>
+</html>

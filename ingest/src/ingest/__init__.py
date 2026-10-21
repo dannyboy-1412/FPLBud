@@ -1,0 +1,1 @@
+"""FPLBud ingestion jobs."""

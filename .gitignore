@@ -12,6 +12,16 @@ venv/
 .env
 .env.*
 !.env.example
+# Local dumps of the old Supabase project
+backups/
+# Coverage / type checkers
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+# Generated OpenAPI types
+web/src/lib/api-types.ts
 # OS / editor
 .DS_Store
 Thumbs.db

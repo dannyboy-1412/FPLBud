@@ -1,0 +1,1 @@
+"""FPLBud FastAPI service."""

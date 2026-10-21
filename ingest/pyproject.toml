@@ -1,0 +1,15 @@
+[project]
+name = "ingest"
+version = "0.1.0"
+description = "FPLBud scheduled ingestion jobs"
+requires-python = ">=3.12"
+dependencies = [
+    "fplcore",
+]
+
+[project.scripts]
+ingest = "ingest.run:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

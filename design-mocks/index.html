@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FPLBud · Design directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #F4EFE4;
+      --ink: #161412;
+      --ink-soft: #4A453E;
+      --rule: #CFC6B4;
+      --vermilion: #D9381E;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Instrument Sans", system-ui, sans-serif; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
+    .kicker { font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: var(--ink-soft); }
+    h1 { font-family: Fraunces, Georgia, serif; font-size: 3rem; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 12px; }
+    .lede { font-size: 1.125rem; color: var(--ink-soft); max-width: 62ch; line-height: 1.55; }
+    .rule { height: 1px; background: var(--rule); margin: 40px 0; box-shadow: 0 4px 0 var(--rule); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+    article {
+      border: 1px solid var(--rule);
+      padding: 24px;
+      background: #FBF8F1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 280px;
+    }
+    article h2 { font-family: Fraunces, Georgia, serif; font-size: 1.5rem; margin: 0; }
+    article p { margin: 0; color: var(--ink-soft); line-height: 1.5; flex: 1; }
+    .num { font-family: Fraunces, Georgia, serif; font-size: 2rem; color: var(--vermilion); }
+    .links { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+    a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+    a:hover { color: var(--vermilion); }
+    .note { font-size: 0.875rem; color: var(--ink-soft); margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="kicker">FPLBud · v1 visual directions</p>
+    <h1>Pick a look.</h1>
+    <p class="lede">Five static HTML/CSS mocks of the same product: same squad, same plan (sell Saka, buy Palmer), same numbers. Open each direction and compare landing, dashboard, and the guest lock. Nothing here is wired to the app yet.</p>
+    <div class="rule"></div>
+    <div class="grid">
+      <article>
+        <div class="num">01</div>
+        <h2>Matchday Programme</h2>
+        <p>Editorial newsprint. Serif headlines, hairline rules, vermilion stamp. Calm, British, print-first.</p>
+        <div class="links">
+          <a href="01-matchday-programme/landing.html">Landing</a>
+          <a href="01-matchday-programme/dashboard.html">Dashboard</a>
+          <a href="01-matchday-programme/try.html">Guest preview</a>
+        </div>
+      </article>
+      <article>
+        <div class="num">02</div>
+        <h2>Floodlight</h2>
+        <p>Night match. Warm dark turf, sodium amber light pools, scoreboard countdown. Cinematic deadline energy.</p>
+        <div class="links">
+          <a href="02-floodlight/landing.html">Landing</a>
+          <a href="02-floodlight/dashboard.html">Dashboard</a>
+          <a href="02-floodlight/try.html">Guest preview</a>
+        </div>
+      </article>
+      <article>
+        <div class="num">03</div>
+        <h2>Blueprint</h2>
+        <p>Cyanotype drawing. Measured grid, orange marker annotations, title blocks. Shows the working.</p>
+        <div class="links">
+          <a href="03-blueprint/landing.html">Landing</a>
+          <a href="03-blueprint/dashboard.html">Dashboard</a>
+          <a href="03-blueprint/try.html">Guest preview</a>
+        </div>
+      </article>
+      <article>
+        <div class="num">04</div>
+        <h2>Sticker Album</h2>
+        <p>Neo-brutalist 90s album. Chunky ink borders, hard shadows, SWAP starbursts. Loud and tactile.</p>
+        <div class="links">
+          <a href="04-sticker-album/landing.html">Landing</a>
+          <a href="04-sticker-album/dashboard.html">Dashboard</a>
+          <a href="04-sticker-album/try.html">Guest preview</a>
+        </div>
+      </article>
+      <article>
+        <div class="num">05</div>
+        <h2>Quant Desk</h2>
+        <p>Trading terminal. Dense panes, order tickets, P&amp;L, command palette. Built for power users.</p>
+        <div class="links">
+          <a href="05-quant-desk/landing.html">Landing</a>
+          <a href="05-quant-desk/dashboard.html">Dashboard</a>
+          <a href="05-quant-desk/try.html">Guest preview</a>
+        </div>
+      </article>
+    </div>
+    <p class="note">Sample data is GW7, Danny’s XI, 1 FT, bank £1.4m, recommended +6.4 vs rolling. Tabs switch locally; no backend.</p>
+  </div>
+</body>
+</html>

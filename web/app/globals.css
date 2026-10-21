@@ -277,8 +277,8 @@ body:has(.matchday) {
   border: 2px solid rgba(255, 255, 255, 0.88);
 }
 
-.pitch-mark .box.far { top: 0; border-top: 0; }
-.pitch-mark .box.near { bottom: 0; border-bottom: 0; }
+.pitch-mark .box.near { top: 0; border-top: 0; }
+.pitch-mark .box.far { bottom: 0; border-bottom: 0; }
 
 .pitch-mark .six {
   left: 33%;
@@ -287,8 +287,8 @@ body:has(.matchday) {
   border: 2px solid rgba(255, 255, 255, 0.88);
 }
 
-.pitch-mark .six.far { top: 0; border-top: 0; }
-.pitch-mark .six.near { bottom: 0; border-bottom: 0; }
+.pitch-mark .six.near { top: 0; border-top: 0; }
+.pitch-mark .six.far { bottom: 0; border-bottom: 0; }
 
 .pitch-mark .arc {
   left: 50%;
@@ -299,15 +299,15 @@ body:has(.matchday) {
   transform: translateX(-50%);
 }
 
-.pitch-mark .arc.far { top: 13%; clip-path: inset(42% 0 0 0); }
-.pitch-mark .arc.near { bottom: 13%; clip-path: inset(0 0 42% 0); }
+.pitch-mark .arc.near { top: 13%; clip-path: inset(42% 0 0 0); }
+.pitch-mark .arc.far { bottom: 13%; clip-path: inset(0 0 42% 0); }
 
 .pitch-rows {
   position: relative;
   z-index: 1;
   min-height: 620px;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   justify-content: space-evenly;
   padding: 28px 8px 22px;
 }
@@ -321,8 +321,9 @@ body:has(.matchday) {
 
 .pitch-card {
   position: relative;
-  width: 92px;
-  flex: 0 1 92px;
+  width: 108px;
+  max-width: 18%;
+  flex: 0 1 108px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -363,12 +364,12 @@ body:has(.matchday) {
 }
 
 .pitch-name {
-  padding: 3px 4px 0;
+  padding: 4px 4px 0;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.25;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
 }
 
 .pitch-club {
@@ -399,20 +400,19 @@ body:has(.matchday) {
 .pitch-order {
   position: absolute;
   z-index: 2;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
 }
-
-.pitch-badge { top: -2px; right: 6px; }
+.pitch-badge { top: 0; right: 8px; }
 .pitch-badge.is-c { background: #111; color: #fff; box-shadow: 0 0 0 1.5px #fff; }
 .pitch-badge.is-v { background: #fff; color: #111; box-shadow: 0 0 0 1.5px #111; }
-.pitch-order { top: -2px; left: 4px; background: rgba(8, 40, 22, 0.85); color: #fff; }
+.pitch-order { top: 0; left: 2px; background: rgba(8, 40, 22, 0.92); color: #fff; }
 
 .pitch-subs {
   background: #083422;
@@ -422,8 +422,8 @@ body:has(.matchday) {
 .pitch-subs .kicker { color: #c9efd8; margin: 0 10px 10px; }
 
 @media (max-width: 720px) {
-  .pitch-rows { min-height: 520px; padding-top: 18px; }
-  .pitch-card { width: 60px; flex-basis: 60px; }
+  .pitch-rows { min-height: 500px; padding: 16px 4px 14px; }
+  .pitch-card { width: auto; max-width: 72px; flex: 1 1 0; }
   .pitch-name { font-size: 10px; }
   .pitch-club, .pitch-opp { font-size: 9px; }
   .pitch-shirt { width: 30px; height: 26px; }

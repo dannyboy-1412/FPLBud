@@ -102,8 +102,8 @@ export function PlanArticle({ plan, locked }: { plan: HorizonPlan; locked?: bool
     return (
       <div className="relative">
         <div className="blur-[6px] pointer-events-none select-none">{inner}</div>
-        <div className="absolute inset-0 grid place-items-center bg-[rgba(244,239,228,0.6)]">
-          <div className="bg-paper-bright border border-ink shadow-[6px_6px_0_#161412] p-8 max-w-[420px] text-center">
+        <div className="absolute inset-0 grid place-items-center bg-paper/70">
+          <div className="bg-paper-bright border border-ink shadow-[6px_6px_0_var(--ink)] p-8 max-w-[420px] text-center">
             <p className="kicker">Members&apos; edition</p>
             <h2 className="mt-2">Your 5-week plan is one sign-in away</h2>
             <p className="prose-body mt-3">Sign in with Google to unlock your 5-week plan.</p>

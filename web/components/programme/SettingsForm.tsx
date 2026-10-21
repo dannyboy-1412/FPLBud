@@ -133,7 +133,7 @@ export function SettingsForm({ profile, meta }: { profile: Profile; meta: Meta }
       </section>
       {deleteOpen ? (
         <div className="fixed inset-0 grid place-items-center bg-[rgba(22,20,18,0.4)]">
-          <div className="bg-paper-bright border border-ink shadow-[6px_6px_0_#161412] p-8 max-w-md">
+          <div className="bg-paper-bright border border-ink shadow-[6px_6px_0_var(--ink)] p-8 max-w-md">
             <h2>Delete account</h2>
             <p className="prose-body mt-3">
               This deletes your profile, saved team and plans. It can&apos;t be undone.

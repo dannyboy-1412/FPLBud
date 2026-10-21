@@ -28,7 +28,7 @@ export function SelectionCriteria({
             title={labels[k]}
             style={{
               flex: weights[k],
-              background: ["#161412", "#4A453E", "#8C857A", "#BDB4A1", "#5E574B", "#3A352C", "#CFC6B4"][i],
+              background: `color-mix(in srgb, var(--ink) ${100 - i * 12}%, var(--paper))`,
             }}
           />
         ))}
@@ -67,8 +67,8 @@ export function SelectionCriteria({
         </div>
       ))}
       {disabled ? (
-        <div className="absolute inset-0 grid place-items-center bg-[rgba(244,239,228,0.6)]">
-          <p className="caption bg-paper-bright border border-ink shadow-[6px_6px_0_#161412] p-6">
+        <div className="absolute inset-0 grid place-items-center bg-paper/70">
+          <p className="caption bg-paper-bright border border-ink shadow-[6px_6px_0_var(--ink)] p-6">
             Sign in with Google to set your own criteria.
           </p>
         </div>

@@ -1,30 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f4efe4;
-  --paper-deep: #eae3d3;
-  --paper-bright: #fbf8f1;
-  --ink: #161412;
-  --ink-soft: #4a453e;
-  --ink-faint: #8c857a;
-  --rule: #cfc6b4;
+  --paper: #e7f4ec;
+  --paper-deep: #d3eadc;
+  --paper-bright: #f4fbf6;
+  --ink: #10241a;
+  --ink-soft: #3c5a49;
+  --ink-faint: #6a8878;
+  --rule: #c3dacb;
   --vermilion: #d9381e;
   --vermilion-ink: #a82813;
-  --racing: #1f4d3a;
-  --racing-tint: #dce5dc;
+  --racing: #0e7a43;
+  --racing-tint: #d7efe2;
   --ochre: #b8860b;
   --ochre-tint: #f3e6c4;
   --claret: #7a1f2b;
   --claret-tint: #f0dadb;
   --pos-gkp: #b8860b;
-  --pos-def: #1f4d3a;
+  --pos-def: #0e7a43;
   --pos-mid: #2b4c7e;
   --pos-fwd: #d9381e;
-  --fdr-1: #fbf8f1;
-  --fdr-2: #e3dccb;
-  --fdr-3: #bdb4a1;
-  --fdr-4: #5e574b;
-  --fdr-5: #161412;
+  --fdr-1: #f4fbf6;
+  --fdr-2: #d3eadc;
+  --fdr-3: #8fb89e;
+  --fdr-4: #3c5a49;
+  --fdr-5: #10241a;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --radius: 2px;
   --background: var(--paper);
@@ -32,26 +32,26 @@
 }
 
 [data-edition="evening"] {
-  --paper: #1a1814;
-  --paper-deep: #12110e;
-  --paper-bright: #24211b;
-  --ink: #ede6d6;
-  --ink-soft: #b9b09f;
-  --ink-faint: #7d7567;
-  --rule: #3a352c;
+  --paper: #0c1612;
+  --paper-deep: #12201a;
+  --paper-bright: #17261e;
+  --ink: #e7f6ec;
+  --ink-soft: #b7d0c0;
+  --ink-faint: #7f9d8c;
+  --rule: #24382d;
   --vermilion: #f0553a;
   --vermilion-ink: #f0553a;
-  --racing: #6fae8c;
-  --racing-tint: #24332b;
+  --racing: #3ddc97;
+  --racing-tint: #163226;
   --ochre: #d9a93a;
   --ochre-tint: #3a3018;
   --claret: #e06a78;
   --claret-tint: #3a1c22;
-  --fdr-1: #24211b;
-  --fdr-2: #3a352c;
-  --fdr-3: #5e574b;
-  --fdr-4: #bdb4a1;
-  --fdr-5: #ede6d6;
+  --fdr-1: #17261e;
+  --fdr-2: #24382d;
+  --fdr-3: #3d5c4a;
+  --fdr-4: #b7d0c0;
+  --fdr-5: #e7f6ec;
 }
 
 @theme inline {
@@ -169,40 +169,7 @@ body {
   * { animation: none !important; transition: opacity 120ms var(--ease) !important; }
 }
 
-body:has(.matchday) {
-  --paper: #e7f4ec;
-  --paper-deep: #d3eadc;
-  --paper-bright: #f4fbf6;
-  --ink: #10241a;
-  --ink-soft: #3c5a49;
-  --ink-faint: #6a8878;
-  --rule: #c3dacb;
-  --racing: #0e7a43;
-  --racing-tint: #d7efe2;
-  background-color: var(--paper);
-  color: var(--ink);
-}
-
-[data-edition="evening"] body:has(.matchday) {
-  --paper: #0c1612;
-  --paper-deep: #12201a;
-  --paper-bright: #17261e;
-  --ink: #e7f6ec;
-  --ink-soft: #b7d0c0;
-  --ink-faint: #7f9d8c;
-  --rule: #24382d;
-  --racing: #3ddc97;
-  --racing-tint: #163226;
-  --fdr-1: #17261e;
-  --fdr-2: #24382d;
-  --fdr-3: #3d5c4a;
-  --fdr-4: #b7d0c0;
-  --fdr-5: #e7f6ec;
-  background-color: var(--paper);
-  color: var(--ink);
-}
-
-.matchday .team-sheet {
+.team-sheet {
   background: var(--paper-bright);
   border: 1px solid var(--rule);
   border-radius: 18px;

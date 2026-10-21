@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from psycopg import Connection
 from psycopg.types.json import Json
 from pydantic import BaseModel, Field
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from api.auth import current_user
 from api.deps import db_conn, get_settings_dep
 from api.limiter import limiter
-from api.services import load_merged_entry, snapshot_from_cache, team_report_payload
+from api.services import load_merged_entry, snapshot_from_cache
 from api.worker import kickoff
 from fplcore.agent.queue import enqueue_run
 from fplcore.client import FplClient, FplNotFoundError
@@ -68,34 +68,6 @@ def get_me(user: dict = Depends(current_user), conn: Connection = Depends(db_con
         "snapshot": dict(snapshot) if snapshot else None,
         "latest_run_id": _latest_run_id(conn, user["id"], profile["fpl_entry_id"]),
     }
-
-
-@router.get("/me/report")
-@limiter.limit("30/minute")
-async def get_report(
-    request: Request,
-    entry_id: int = Query(gt=0),
-    user: dict = Depends(current_user),
-    conn: Connection = Depends(db_conn),
-    settings: Settings = Depends(get_settings_dep),
-) -> dict:
-    profile = conn.execute("select * from public.profiles where id = %s", [user["id"]]).fetchone()
-    if profile is None:
-        raise HTTPException(status_code=404, detail="profile not found")
-    try:
-        async with FplClient(settings) as client:
-            payload, bootstrap = await load_merged_entry(conn, client, entry_id)
-    except FplNotFoundError:
-        raise HTTPException(status_code=404, detail="team not found") from None
-    season_id = current_season_id(conn)
-    snapshot = snapshot_from_cache(payload, bootstrap, season_id)
-    return team_report_payload(
-        conn,
-        snapshot,
-        user_id=user["id"],
-        weights=dict(profile["weights"] or DEFAULT_WEIGHTS),
-        saved_entry_id=profile["fpl_entry_id"],
-    )
 
 
 @router.put("/me")

@@ -1,11 +1,8 @@
 export function HeadingSkeleton() {
   return (
-    <div className="flex justify-between items-end gap-4 mb-6">
-      <div className="flex-1">
-        <div className="skeleton h-3 w-28 mb-3" />
-        <div className="skeleton h-10 w-64" />
-      </div>
-      <div className="skeleton h-11 w-32" />
+    <div className="mb-6">
+      <div className="skeleton h-3 w-28 mb-3" />
+      <div className="skeleton h-10 w-64" />
     </div>
   );
 }
@@ -39,32 +36,14 @@ export function PitchSkeleton() {
   );
 }
 
-export function TeamSheetSkeleton() {
+export function TeamViewSkeleton() {
   return (
-    <aside>
-      <div className="skeleton h-3 w-24 mb-4" />
-      {Array.from({ length: 5 }, (_, i) => (
-        <div key={i} className="flex justify-between py-3 border-b border-rule">
-          <div className="skeleton h-3 w-28" />
-          <div className="skeleton h-6 w-16" />
-        </div>
-      ))}
-    </aside>
-  );
-}
-
-export function PlanSkeleton() {
-  return (
-    <div className="mt-8" aria-hidden>
-      <div className="skeleton h-3 w-40 mb-3" />
-      <div className="skeleton h-8 w-80 mb-4" />
-      <div className="flex gap-8 my-4">
-        <div className="skeleton h-14 w-24" />
-        <div className="skeleton h-10 w-16" />
-        <div className="skeleton h-10 w-20" />
-      </div>
-      <div className="skeleton h-20 w-full mb-4" />
-      <div className="skeleton h-32 w-full max-w-[62ch]" />
+    <div aria-hidden>
+      <div className="skeleton h-3 w-32 mb-2" />
+      <div className="skeleton h-10 w-64 mb-6" />
+      <div className="skeleton h-16 w-40 mb-8" />
+      <PitchSkeleton />
+      <StatsSkeleton />
     </div>
   );
 }
@@ -86,16 +65,6 @@ export function SettingsSkeleton() {
       {Array.from({ length: 4 }, (_, i) => (
         <div key={i} className="skeleton h-16 w-full" />
       ))}
-    </div>
-  );
-}
-
-export function BroadsheetSkeleton() {
-  return (
-    <div className="broadsheet">
-      <PitchSkeleton />
-      <div className="col-rule" />
-      <TeamSheetSkeleton />
     </div>
   );
 }

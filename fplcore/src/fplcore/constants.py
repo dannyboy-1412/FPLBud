@@ -26,6 +26,11 @@ GOAL_POINTS = {1: 6, 2: 6, 3: 5, 4: 4}
 PROJ_A_FALLBACK = 1.0
 PROJ_B_FALLBACK = 6.0
 
+# Squad score places an XI on 0–10 between these percentiles of players who have a fixture.
+# 0 is an ordinary XI (25th percentile, captained). 10 is a premium XI (98th percentile, captained).
+SQUAD_SCORE_LOW_PERCENTILE = 25.0
+SQUAD_SCORE_HIGH_PERCENTILE = 98.0
+
 FORM_EWMA_ALPHA = 0.5
 XGI_MINUTES_PRIOR = 270
 TREND_DEADLINE_HOURS_FLOOR = 1.0

@@ -6,6 +6,7 @@ from fplcore.models import ChipUsed, EntryHistoryRow
 from fplcore.stats.insights import defensive_leaders, finishing_variance
 from fplcore.stats.market import price_pressure
 from fplcore.stats.report import (
+    overperforming_players,
     performing_players,
     squad_score_for_xi,
     underperforming_players,
@@ -138,20 +139,41 @@ def test_xi_element_ids_takes_starting_eleven() -> None:
     assert xi_element_ids(squad) == list(range(1, 12))
 
 
-def test_squad_score_is_mean_combined_score_times_100() -> None:
-    ids = list(range(1, 12))
-    scores = {pid: 0.5 for pid in ids}
-    assert squad_score_for_xi(ids, scores) == 50.0
+def _spread_field() -> list[float]:
+    return [1.0, 2.0, 3.0, 4.0]
 
 
-def test_squad_score_missing_player_counts_as_zero() -> None:
-    ids = list(range(1, 12))
-    scores = {pid: 1.0 for pid in range(1, 11)}
-    assert squad_score_for_xi(ids, scores) == 90.9
+def test_squad_score_counts_the_captain_twice() -> None:
+    field = _spread_field()
+    # Eleven 2.5s is 27.5, plus the captain again is 30.
+    # Forgetting the captain would land on 2.5 rather than 3.4.
+    assert squad_score_for_xi([2.5] * 11, field) == 3.4
 
 
-def test_squad_score_short_xi_pads_to_eleven() -> None:
-    assert squad_score_for_xi([1], {1: 1.0}) == 9.1
+def test_squad_score_premium_xi_is_ten_and_ordinary_xi_is_zero() -> None:
+    field = _spread_field()
+    # 98th percentile of 1..4 is 3.94. Twelve of those (XI + captain) is the top of the scale.
+    assert squad_score_for_xi([3.94] * 11, field) == 10.0
+    assert squad_score_for_xi([10.0] * 11, field) == 10.0
+    # 25th percentile is 1.75, so an XI below that scores 0.
+    assert squad_score_for_xi([1.0] * 11, field) == 0.0
+
+
+def test_squad_score_ignores_players_without_a_fixture() -> None:
+    assert squad_score_for_xi([2.5] * 11, [0.0, 0.0, 1.0, 2.0, 3.0, 4.0]) == 3.4
+
+
+def test_squad_score_flat_field_is_five() -> None:
+    assert squad_score_for_xi([3.0] * 11, [3.0, 3.0, 3.0]) == 5.0
+    assert squad_score_for_xi([], []) == 0.0
+
+
+def test_squad_score_short_xi_pads_with_zeros() -> None:
+    assert squad_score_for_xi([4.0], _spread_field()) == 0.0
+
+
+def test_squad_score_ignores_players_past_the_xi() -> None:
+    assert squad_score_for_xi([2.5] * 11 + [100.0], _spread_field()) == 3.4
 
 
 def test_xi_expected_points_sums_projections() -> None:
@@ -184,12 +206,16 @@ def test_performing_and_underperforming_stay_inside_squad() -> None:
     ]
     players = [
         _player(id=1, web_name="Due", goals_scored=1, assists=0, expected_goal_involvements=5.0),
+        _player(id=3, web_name="Hot", goals_scored=8, assists=2, expected_goal_involvements=1.0),
         _player(id=9, web_name="Other", goals_scored=0, assists=0, expected_goal_involvements=9.0),
+        _player(id=10, web_name="Outside", goals_scored=12, assists=4, expected_goal_involvements=0.5),
     ]
     performing = performing_players(recent, {1})
-    under = underperforming_players(players, {1})
+    under = underperforming_players(players, {1, 3})
+    over = overperforming_players(players, {1, 3})
     assert [p["id"] for p in performing] == [1]
-    assert [p["id"] for p in under] == [1]
+    assert [p["id"] for p in under] == [1, 3]
+    assert [p["id"] for p in over] == [3, 1]
 
 
 def test_parse_weights_query_none() -> None:

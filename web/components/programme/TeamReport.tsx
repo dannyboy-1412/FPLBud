@@ -1,8 +1,14 @@
-import { GoogleButton } from "@/components/programme/GoogleButton";
-import { ReportPlans } from "@/components/programme/TryEdition";
 import { PlayerCell, StatTable } from "@/components/dashboard/stats/StatTable";
 import { signed } from "@/components/dashboard/stats/format";
-import type { PublicTeam, TeamReport } from "@/lib/api";
+import { Pitch } from "@/components/programme/Pitch";
+import type { PlayerRow, PublicTeam, VarianceRow } from "@/lib/api";
+
+const POSITIONS = [
+  { id: 1, label: "Goalkeeper" },
+  { id: 2, label: "Defender" },
+  { id: 3, label: "Midfielder" },
+  { id: 4, label: "Striker" },
+] as const;
 
 function scoreLabel(value: number | undefined) {
   if (value == null || Number.isNaN(value)) return "—";
@@ -23,7 +29,7 @@ export function ReportHeader({
       <p className="kicker">Team report</p>
       <h1 className="mt-1">{name}</h1>
       <p className="caption">{manager}</p>
-      {overallRank ? <p className="caption">Overall rank {overallRank.toLocaleString()}</p> : null}
+      {overallRank ? <p className="caption">Overall rank {overallRank.toLocaleString("en-GB")}</p> : null}
     </>
   );
 }
@@ -32,104 +38,80 @@ export function SquadScore({ value, caption }: { value: number; caption: string 
   return (
     <div className="mt-8 pb-8 border-b border-rule">
       <p className="kicker">Squad score</p>
-      <p className="stat-xl mt-2">{scoreLabel(value)}</p>
+      <p className="stat-xl mt-2 flex items-baseline gap-2">
+        <span>{scoreLabel(value)}</span>
+        <span className="caption">/10</span>
+      </p>
       <p className="caption mt-2">{caption}</p>
     </div>
   );
 }
 
-export function GuestReport({ team }: { team: PublicTeam }) {
+function varianceRows(players: VarianceRow[] | undefined) {
+  return (players ?? []).map((player) => ({
+    id: player.id,
+    cells: [
+      <PlayerCell key="n" player={player} />,
+      player.xgi.toFixed(1),
+      player.goals + player.assists,
+      signed(player.xgi_delta),
+    ],
+  }));
+}
+
+export function TeamView({
+  team,
+  leaders,
+  showHeader = true,
+}: {
+  team: PublicTeam;
+  leaders: Record<number, PlayerRow[]>;
+  showHeader?: boolean;
+}) {
   return (
     <>
-      <ReportHeader name={team.name} manager={team.manager} overallRank={team.overall_rank} />
-      <SquadScore value={team.squad_score} caption="Starting XI, next gameweek. Sign in for the rest." />
-      <LockedSections entryId={team.entry_id} />
-    </>
-  );
-}
-
-function LockedSections({ entryId }: { entryId: number }) {
-  const blocks = [
-    ["Expected points", "Next gameweek projection for your starting XI."],
-    ["Transfer suggestions", "Who to sell, who to buy, and whether a hit is worth it."],
-    ["Performing players", "The squad players putting up the most recent points."],
-    ["Underperforming players", "Squad players whose xGI is ahead of actual returns."],
-  ] as const;
-  return (
-    <div className="mt-10">
-      <div className="grid md:grid-cols-2 gap-x-12 gap-y-8">
-        {blocks.map(([title, copy]) => (
-          <section key={title} className="border-b border-rule pb-6">
-            <p className="kicker">{title}</p>
-            <p className="prose-body mt-3 text-ink-faint">{copy}</p>
-          </section>
-        ))}
+      {showHeader ? (
+        <ReportHeader name={team.name} manager={team.manager} overallRank={team.overall_rank} />
+      ) : null}
+      <SquadScore
+        value={team.squad_score}
+        caption="Projected points this gameweek, starting XI plus captain."
+      />
+      <div className="mt-8">
+        <Pitch team={team} />
       </div>
-      <div className="mt-8 max-w-xs">
-        <GoogleButton entryId={entryId} label="Sign in to unlock your report" />
-      </div>
-    </div>
-  );
-}
-
-export function MemberSections({ report }: { report: TeamReport }) {
-  return (
-    <div className="space-y-12 mt-10">
-      <section>
-        <p className="kicker">Expected points</p>
-        <p className="stat-xl mt-2">{report.expected_points.total.toFixed(1)}</p>
-        <p className="caption mt-2">Next gameweek, starting XI.</p>
-        <div className="mt-4">
-          <StatTable
-            headers={["Player", "Proj"]}
-            rows={report.expected_points.players.map((p) => ({
-              id: p.id,
-              cells: [p.web_name, p.proj.toFixed(1)],
-            }))}
-          />
-        </div>
-      </section>
-      <section>
-        <p className="kicker mb-3">Transfer suggestions</p>
-        {Object.keys(report.plans).length === 0 ? (
-          <p className="caption">Plans aren&apos;t ready yet.</p>
-        ) : (
-          <ReportPlans plans={report.plans} />
-        )}
-      </section>
-      <div className="grid md:grid-cols-2 gap-x-12 gap-y-10">
-        <section>
-          <p className="kicker mb-3">Performing</p>
-          <p className="caption mb-3">Squad players by recent points.</p>
-          <StatTable
-            headers={["Player", "Last 6", "Form"]}
-            rows={report.performing.map((p) => ({
-              id: p.id,
-              cells: [
-                <PlayerCell key="n" player={p} />,
-                p.recent_points,
-                p.form.toFixed(1),
-              ],
-            }))}
-          />
-        </section>
+      <div className="grid md:grid-cols-2 gap-x-12 gap-y-10 mt-10">
         <section>
           <p className="kicker mb-3">Underperforming</p>
           <p className="caption mb-3">xGI ahead of actual goal involvements.</p>
-          <StatTable
-            headers={["Player", "xGI", "G+A", "Δ"]}
-            rows={report.underperforming.map((p) => ({
-              id: p.id,
-              cells: [
-                <PlayerCell key="n" player={p} />,
-                p.xgi.toFixed(1),
-                p.goals + p.assists,
-                signed(p.xgi_delta),
-              ],
-            }))}
-          />
+          <StatTable headers={["Player", "xGI", "G+A", "Δ"]} rows={varianceRows(team.underperforming)} />
+        </section>
+        <section>
+          <p className="kicker mb-3">Overperforming</p>
+          <p className="caption mb-3">Involvements ahead of xGI.</p>
+          <StatTable headers={["Player", "xGI", "G+A", "Δ"]} rows={varianceRows(team.overperforming)} />
         </section>
       </div>
-    </div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-x-12 gap-y-10 mt-10">
+        {POSITIONS.map((position) => (
+          <section key={position.id}>
+            <p className="kicker mb-3">{position.label}</p>
+            <p className="caption mb-3">Top five by expected points.</p>
+            <StatTable
+              headers={["Player", "Proj"]}
+              rows={(leaders[position.id] ?? []).map((player) => ({
+                id: player.id,
+                cells: [
+                  <>
+                    {player.web_name} <span className="caption">{player.team_short}</span>
+                  </>,
+                  player.proj.toFixed(1),
+                ],
+              }))}
+            />
+          </section>
+        ))}
+      </div>
+    </>
   );
 }

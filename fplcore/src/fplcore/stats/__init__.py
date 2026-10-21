@@ -8,6 +8,7 @@ from fplcore.stats.insights import (
 )
 from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_transfers
 from fplcore.stats.report import (
+    overperforming_players,
     performing_players,
     squad_score_for_xi,
     underperforming_players,
@@ -31,6 +32,7 @@ __all__ = [
     "finishing_variance",
     "in_form",
     "movers_24h",
+    "overperforming_players",
     "ownership_profile",
     "performing_players",
     "price_movers",

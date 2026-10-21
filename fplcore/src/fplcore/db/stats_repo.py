@@ -28,13 +28,13 @@ def next_gw_id(conn: Connection, season_id: str) -> int:
     return int(fallback["id"]) if fallback else 1
 
 
-def next_gw_metric_rows(conn: Connection, player_ids: list[int]) -> list[dict[str, Any]]:
-    if not player_ids:
+def next_gw_metric_rows(conn: Connection, player_ids: list[int] | None = None) -> list[dict[str, Any]]:
+    """Metric rows for the next gameweek. Omit player_ids to load the whole field."""
+    if player_ids is not None and not player_ids:
         return []
     season = current_season_id(conn)
     next_gw = next_gw_id(conn, season)
-    rows = conn.execute(
-        """
+    sql = """
         select p.id, p.web_name, p.status, p.chance_of_playing_next_round,
                m.form_score, m.fixture_score, m.home_score, m.xgi_score,
                m.value_score, m.minutes_score, m.trend_score, m.fixture_count
@@ -42,11 +42,13 @@ def next_gw_metric_rows(conn: Connection, player_ids: list[int]) -> list[dict[st
           left join player_metrics m
             on m.season_id = p.season_id and m.player_id = p.id
            and m.horizon = 1 and m.computed_for_gw = %s
-         where p.season_id = %s and p.id = any(%s)
-        """,
-        [next_gw, season, player_ids],
-    )
-    return [dict(r) for r in rows]
+         where p.season_id = %s
+    """
+    params: list[Any] = [next_gw, season]
+    if player_ids is not None:
+        sql += " and p.id = any(%s)"
+        params.append(player_ids)
+    return [dict(row) for row in conn.execute(sql, params)]
 
 
 def current_player_rows(conn: Connection, *, position: int | None = None) -> list[dict[str, Any]]:

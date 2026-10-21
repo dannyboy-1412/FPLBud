@@ -15,6 +15,7 @@ def list_players(
     team: int | None = Query(default=None),
     max_cost: int | None = Query(default=None),
     horizon: int = Query(default=1, ge=1, le=6),
+    limit: int = Query(default=200, ge=1, le=200),
     user: dict | None = Depends(optional_user),
     conn: Connection = Depends(db_conn),
 ) -> dict:
@@ -28,7 +29,7 @@ def list_players(
     ranked = ranked_players(
         conn, weights=weights, position=position, team=team, max_cost=max_cost, horizon=horizon
     )
-    return {"players": ranked[:200], "count": len(ranked), "using_defaults": user is None}
+    return {"players": ranked[:limit], "count": len(ranked), "using_defaults": user is None}
 
 
 @router.get("/players/{player_id}")

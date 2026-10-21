@@ -1,26 +1,17 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { LandingLookup } from "@/components/programme/LandingLookup";
-import { StatsSkeleton } from "@/components/programme/Skeletons";
+import { TeamViewSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
-import { GuestReport, MemberSections, ReportHeader, SquadScore } from "@/components/programme/TeamReport";
+import { TeamView } from "@/components/programme/TeamReport";
 import { isTeamNotFound, type PublicTeam } from "@/lib/api";
-import { getPublicTeam, getTeamReport } from "@/lib/server/data";
+import { getMe, getPositionLeaders, getPublicTeam } from "@/lib/server/data";
 import { getAccessToken } from "@/lib/server/session";
 import { parseTeamId } from "@/lib/team-id";
 
 export default function TryPage({ params }: PageProps<"/try/[entryId]">) {
   return (
-    <Suspense
-      fallback={
-        <>
-          <div className="skeleton h-3 w-32 mb-2" />
-          <div className="skeleton h-10 w-64 mb-6" />
-          <div className="skeleton h-16 w-40 mb-8" />
-          <StatsSkeleton />
-        </>
-      }
-    >
+    <Suspense fallback={<TeamViewSkeleton />}>
       <SectionError>
         <TryContent params={params} />
       </SectionError>
@@ -36,6 +27,12 @@ async function TryContent({ params }: { params: PageProps<"/try/[entryId]">["par
 }
 
 async function TryTeam({ entryId }: { entryId: number }) {
+  const token = await getAccessToken();
+  if (token) {
+    const me = await getMe();
+    if (me.profile.fpl_entry_id === entryId) redirect("/dashboard");
+  }
+  const leadersPromise = getPositionLeaders();
   let team: PublicTeam;
   try {
     team = await getPublicTeam(entryId);
@@ -43,24 +40,7 @@ async function TryTeam({ entryId }: { entryId: number }) {
     if (isTeamNotFound(err)) return <UnknownTeam />;
     throw err;
   }
-  const token = await getAccessToken();
-  if (!token) return <GuestReport team={team} />;
-  return (
-    <>
-      <ReportHeader name={team.name} manager={team.manager} overallRank={team.overall_rank} />
-      <SquadScore value={team.squad_score} caption="Starting XI, next gameweek." />
-      <Suspense fallback={<StatsSkeleton />}>
-        <SectionError>
-          <SignedInReport entryId={entryId} />
-        </SectionError>
-      </Suspense>
-    </>
-  );
-}
-
-async function SignedInReport({ entryId }: { entryId: number }) {
-  const report = await getTeamReport(entryId);
-  return <MemberSections report={report} />;
+  return <TeamView team={team} leaders={await leadersPromise} />;
 }
 
 function UnknownTeam() {

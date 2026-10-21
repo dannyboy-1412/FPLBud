@@ -1,14 +1,5 @@
-import { Suspense } from "react";
-import { MarketSection } from "@/components/dashboard/stats/MarketSection";
-import { StatsSkeleton } from "@/components/programme/Skeletons";
-import SectionError from "@/components/programme/SectionError";
+import { ComingSoon } from "@/components/dashboard/ComingSoon";
 
 export default function MarketPage() {
-  return (
-    <SectionError>
-      <Suspense fallback={<StatsSkeleton />}>
-        <MarketSection />
-      </Suspense>
-    </SectionError>
-  );
+  return <ComingSoon />;
 }

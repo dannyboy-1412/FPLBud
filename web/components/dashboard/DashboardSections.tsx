@@ -5,7 +5,8 @@ import { useSelectedLayoutSegment } from "next/navigation";
 import { IntentPrefetchLink } from "@/components/dashboard/IntentPrefetchLink";
 
 export const DASHBOARD_SECTIONS = [
-  { id: "plans", label: "Plans", href: "/dashboard" },
+  { id: "team", label: "Team", href: "/dashboard" },
+  { id: "plans", label: "Plans", href: "/dashboard/plans" },
   { id: "squad", label: "My squad", href: "/dashboard/squad" },
   { id: "season", label: "My season", href: "/dashboard/season" },
   { id: "market", label: "Market", href: "/dashboard/market" },
@@ -24,7 +25,7 @@ function PendingDot() {
 
 export function DashboardSections() {
   const segment = useSelectedLayoutSegment();
-  const current = segment ?? "plans";
+  const current = segment ?? "team";
   return (
     <nav className="flex flex-wrap gap-7 border-b border-rule my-8" aria-label="Dashboard sections">
       {DASHBOARD_SECTIONS.map((section) => {

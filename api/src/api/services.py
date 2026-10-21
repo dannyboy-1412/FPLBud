@@ -37,12 +37,12 @@ from fplcore.stats.insights import (
 )
 from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_transfers
 from fplcore.stats.report import (
-    combined_scores_by_id,
-    performing_players,
+    overperforming_players,
+    projection_for_row,
     squad_score_for_xi,
     underperforming_players,
     xi_element_ids,
-    xi_expected_points,
+    xi_projections,
 )
 from fplcore.stats.season import captain_returns, season_rows, season_summary
 from fplcore.stats.squad import (
@@ -122,13 +122,19 @@ def public_team_view(snapshot: TeamSnapshot, *, squad_score: float = 0.0) -> dic
 
 def _xi_metric_rows(conn: Connection, snapshot: TeamSnapshot) -> tuple[list[int], dict[int, dict[str, Any]]]:
     xi_ids = xi_element_ids(snapshot.squad_players)
-    rows = stats_repo.next_gw_metric_rows(conn, xi_ids)
+    rows = stats_repo.next_gw_metric_rows(conn)
     return xi_ids, {int(row["id"]): row for row in rows}
 
 
 def compute_squad_score(conn: Connection, snapshot: TeamSnapshot) -> float:
     xi_ids, rows_by_id = _xi_metric_rows(conn, snapshot)
-    return squad_score_for_xi(xi_ids, combined_scores_by_id(xi_ids, rows_by_id, DEFAULT_WEIGHTS))
+    return _squad_score(xi_ids, rows_by_id)
+
+
+def _squad_score(xi_ids: list[int], rows_by_id: dict[int, dict[str, Any]]) -> float:
+    projections = xi_projections(xi_ids, rows_by_id, DEFAULT_WEIGHTS)
+    field = [projection_for_row(row, DEFAULT_WEIGHTS) for row in rows_by_id.values()]
+    return squad_score_for_xi(projections, field)
 
 
 def team_short_names(conn: Connection) -> dict[int, str]:
@@ -164,6 +170,10 @@ def public_team_payload(
     view = public_team_view(snapshot, squad_score=compute_squad_score(conn, snapshot))
     names = team_names if team_names is not None else team_short_names(conn)
     view["squad_players"] = with_pitch_details(view["squad_players"], names, stats_repo.next_event_fixtures(conn))
+    squad_ids = {int(player["element"]) for player in snapshot.squad_players}
+    rows = stats_repo.current_player_rows(conn)
+    view["underperforming"] = underperforming_players(rows, squad_ids)
+    view["overperforming"] = overperforming_players(rows, squad_ids)
     return view
 
 
@@ -195,60 +205,6 @@ def build_horizon_plan(
     plan["explanation"] = TemplateExplainer().explain(plan)
     plan["explanation_source"] = "template"
     return plan
-
-
-def _succeeded_plans(conn: Connection, user_id: Any, entry_id: int) -> dict[str, Any] | None:
-    run = conn.execute(
-        """
-        select id from agent_runs
-         where user_id = %s and entry_id = %s and status = 'succeeded'
-         order by finished_at desc nulls last
-         limit 1
-        """,
-        [user_id, entry_id],
-    ).fetchone()
-    if run is None:
-        return None
-    rows = list(
-        conn.execute(
-            "select horizon, plan from agent_suggestions where run_id = %s",
-            [run["id"]],
-        )
-    )
-    if not rows:
-        return None
-    return {str(row["horizon"]): row["plan"] for row in rows}
-
-
-def team_report_payload(
-    conn: Connection,
-    snapshot: TeamSnapshot,
-    *,
-    user_id: Any,
-    weights: dict[str, float],
-    saved_entry_id: int | None,
-) -> dict[str, Any]:
-    xi_ids, rows_by_id = _xi_metric_rows(conn, snapshot)
-    squad_ids = {int(p["element"]) for p in snapshot.squad_players}
-    plans = None
-    if saved_entry_id and int(saved_entry_id) == int(snapshot.entry_id):
-        plans = _succeeded_plans(conn, user_id, snapshot.entry_id)
-    if not plans:
-        plan = build_horizon_plan(conn, snapshot, weights=weights, horizon=1)
-        plans = {"1": plan} if plan else {}
-    return {
-        "entry_id": snapshot.entry_id,
-        "name": snapshot.name,
-        "manager": snapshot.manager,
-        "overall_rank": snapshot.overall_rank,
-        "squad_score": squad_score_for_xi(
-            xi_ids, combined_scores_by_id(xi_ids, rows_by_id, DEFAULT_WEIGHTS)
-        ),
-        "expected_points": xi_expected_points(xi_ids, rows_by_id, weights),
-        "plans": plans,
-        "performing": performing_players(stats_repo.recent_aggregates(conn), squad_ids),
-        "underperforming": underperforming_players(stats_repo.current_player_rows(conn), squad_ids),
-    }
 
 
 def meta_payload(conn: Connection) -> dict[str, Any]:

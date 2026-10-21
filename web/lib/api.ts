@@ -150,6 +150,8 @@ export type PublicTeam = {
   estimated: boolean;
   caveat: string;
   squad_score: number;
+  underperforming: VarianceRow[];
+  overperforming: VarianceRow[];
 };
 
 export type Meta = {
@@ -297,23 +299,6 @@ export type InsightsStats = {
   defensive: DefensiveRow[];
   bonus: BonusRow[];
   set_pieces: SetPieceTeam[];
-};
-
-export type ExpectedPoints = {
-  total: number;
-  players: Array<{ id: number; web_name: string; proj: number }>;
-};
-
-export type TeamReport = {
-  entry_id: number;
-  name: string;
-  manager: string;
-  overall_rank: number | null;
-  squad_score: number;
-  expected_points: ExpectedPoints;
-  plans: Record<string, HorizonPlan>;
-  performing: FormRow[];
-  underperforming: VarianceRow[];
 };
 
 export type FixtureChip = { opponent: string; fdr: number; is_home: boolean };

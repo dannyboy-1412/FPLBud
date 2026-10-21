@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from psycopg import Connection
@@ -7,6 +8,7 @@ from psycopg.types.json import Json
 
 from fplcore.constants import DC_THRESHOLD
 from fplcore.db.repos import current_season_id
+from fplcore.gameweeks import pick_started_gameweek, pick_upcoming_gameweek
 
 
 def total_players(conn: Connection) -> int:
@@ -16,16 +18,29 @@ def total_players(conn: Connection) -> int:
     return int(row["total_players"]) if row and row["total_players"] else 0
 
 
+def season_gameweeks(conn: Connection, season_id: str) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "select * from gameweeks where season_id = %s order by id",
+        [season_id],
+    )
+    return [dict(row) for row in rows]
+
+
+def upcoming_gameweek(conn: Connection, season_id: str, now: datetime | None = None) -> dict[str, Any] | None:
+    chosen = pick_upcoming_gameweek(season_gameweeks(conn, season_id), now or datetime.now(UTC))
+    return dict(chosen) if chosen is not None else None
+
+
+def started_gameweek(conn: Connection, season_id: str, now: datetime | None = None) -> dict[str, Any] | None:
+    chosen = pick_started_gameweek(season_gameweeks(conn, season_id), now or datetime.now(UTC))
+    return dict(chosen) if chosen is not None else None
+
+
 def next_gw_id(conn: Connection, season_id: str) -> int:
-    row = conn.execute(
-        "select id from gameweeks where season_id = %s and is_next = true", [season_id]
-    ).fetchone()
-    if row:
-        return int(row["id"])
-    fallback = conn.execute(
-        "select id from gameweeks where season_id = %s order by id desc limit 1", [season_id]
-    ).fetchone()
-    return int(fallback["id"]) if fallback else 1
+    chosen = upcoming_gameweek(conn, season_id)
+    if chosen:
+        return int(chosen["id"])
+    return 1
 
 
 def next_gw_metric_rows(conn: Connection, player_ids: list[int] | None = None) -> list[dict[str, Any]]:

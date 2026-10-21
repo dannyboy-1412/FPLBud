@@ -9,6 +9,7 @@ from psycopg.types.json import Json
 
 from fplcore.agent.chips import advise_chips
 from fplcore.agent.queue import finish_run, update_progress
+from fplcore.db.stats_repo import next_gw_id
 from fplcore.explain.factory import get_explainer
 from fplcore.explain.llm import LLMExplainer
 from fplcore.explain.protocol import HorizonResult
@@ -266,11 +267,7 @@ async def run_claimed(
             "flags": snapshot_row["flags"],
             "overrides": snapshot_row["overrides"],
         }
-        gw = conn.execute(
-            "select id from gameweeks where season_id = %s and is_next = true limit 1",
-            [snapshot["season_id"]],
-        ).fetchone()
-        next_gw = int(gw["id"]) if gw else int(snapshot["event"]) + 1
+        next_gw = next_gw_id(conn, str(snapshot["season_id"]))
         weights = dict(run["weights"] or {})
         unlimited = (snapshot.get("active_chip") or "") in {"wildcard", "freehit"}
         results: dict[str, HorizonResult] = {}

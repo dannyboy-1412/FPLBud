@@ -209,10 +209,9 @@ def build_horizon_plan(
 
 def meta_payload(conn: Connection) -> dict[str, Any]:
     season = conn.execute("select id from seasons where is_current = true").fetchone()
-    current = conn.execute(
-        "select * from gameweeks where is_current = true order by id desc limit 1"
-    ).fetchone()
-    nxt = conn.execute("select * from gameweeks where is_next = true limit 1").fetchone()
+    season_id = str(season["id"]) if season else None
+    current = stats_repo.started_gameweek(conn, season_id) if season_id else None
+    nxt = stats_repo.upcoming_gameweek(conn, season_id) if season_id else None
     version = conn.execute("select id from data_versions order by id desc limit 1").fetchone()
     settings_row = conn.execute(
         "select squad_select, squad_min_play, squad_max_play, short_name from positions order by id"
@@ -222,8 +221,8 @@ def meta_payload(conn: Connection) -> dict[str, Any]:
     ).fetchone()
     return {
         "season_id": season["id"] if season else None,
-        "current_event": dict(current) if current else None,
-        "next_event": dict(nxt) if nxt else None,
+        "current_event": current,
+        "next_event": nxt,
         "data_version": version["id"] if version else None,
         "default_weights": DEFAULT_WEIGHTS,
         "metric_labels": METRIC_LABELS,
@@ -243,10 +242,7 @@ def ranked_players(
     horizon: int = 1,
 ) -> list[dict[str, Any]]:
     season = current_season_id(conn)
-    nxt = conn.execute(
-        "select id from gameweeks where season_id = %s and is_next = true", [season]
-    ).fetchone()
-    next_gw = int(nxt["id"]) if nxt else 1
+    next_gw = stats_repo.next_gw_id(conn, season)
     w = renormalise_weights(weights)
     sql = """
         select p.*, t.short_name as team_short, m.form_score, m.fixture_score, m.home_score, m.xgi_score,
@@ -355,10 +351,7 @@ def player_detail(conn: Connection, player_id: int) -> dict[str, Any] | None:
 
 def load_opt_players(conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float], horizon: int) -> list[PlayerOpt]:
     season = snapshot.season_id
-    nxt = conn.execute(
-        "select id from gameweeks where season_id = %s and is_next = true", [season]
-    ).fetchone()
-    next_gw = int(nxt["id"]) if nxt else snapshot.event + 1
+    next_gw = stats_repo.next_gw_id(conn, season)
     current = {int(p["element"]) for p in snapshot.picks}
     selling = {int(k): int(v) for k, v in snapshot.selling_prices.items()}
     rows = list(

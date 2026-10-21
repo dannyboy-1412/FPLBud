@@ -49,25 +49,20 @@ def insights(
 
 
 @router.get("/me/stats/squad")
-def my_squad(
+async def my_squad(
     user: dict = Depends(current_user),
     conn: Connection = Depends(db_conn),
+    settings: Settings = Depends(get_settings_dep),
 ) -> dict:
     profile = conn.execute("select * from public.profiles where id = %s", [user["id"]]).fetchone()
     if profile is None or not profile["fpl_entry_id"]:
         raise HTTPException(status_code=400, detail="save a team id first")
-    snapshot = conn.execute(
-        """
-        select picks from team_snapshots
-         where created_by = %s and entry_id = %s
-         order by fetched_at desc
-         limit 1
-        """,
-        [user["id"], profile["fpl_entry_id"]],
-    ).fetchone()
-    if snapshot is None:
-        raise HTTPException(status_code=404, detail="no team snapshot")
-    return squad_stats_payload(conn, dict(snapshot), dict(profile["weights"]))
+    try:
+        async with FplClient(settings) as client:
+            payload, _bootstrap = await load_merged_entry(conn, client, int(profile["fpl_entry_id"]))
+    except FplNotFoundError:
+        raise HTTPException(status_code=404, detail="team not found") from None
+    return squad_stats_payload(conn, {"picks": payload["picks"]["picks"]}, dict(profile["weights"]))
 
 
 @router.get("/me/stats/season")

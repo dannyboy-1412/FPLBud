@@ -1,0 +1,63 @@
+---
+description: Where FPLBud code lives, so changes start in the right package
+alwaysApply: true
+---
+
+# FPLBud codebase map
+
+Fantasy Premier League assistant. A guest enters a public team ID and gets a next-gameweek plan. A signed-in user (Google via Supabase) saves a team, and a background agent writes plans for the next 1, 3 and 5 gameweeks.
+
+Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm app in `web/`. Domain logic lives in `fplcore`. `api` and `ingest` call it. Read `docs/ARCHITECTURE.md` before changing metrics, the optimiser, the agent, or auth.
+
+## Where to edit
+
+| Change | Start here |
+|---|---|
+| Pages, layout, styling, browser behaviour | `web/` |
+| HTTP routes, JWT checks, rate limits, request wiring | `api/src/api/` |
+| FPL client, models, metrics, optimiser, agent, explanations, stats maths, DB access | `fplcore/src/fplcore/` |
+| Scheduled fetch, upsert, metric recompute, queue drain | `ingest/src/ingest/run.py` and `.github/workflows/ingest.yml` |
+| Tables and RLS | `db/schema.sql`, then a new file in `db/migrations/` |
+| Python tests | `tests/` at the repo root |
+| Frozen FPL API payloads | `samples/` |
+| One-off DB scripts | `scripts/` |
+
+## `fplcore` (`fplcore/src/fplcore/`)
+
+- `client.py`, `models.py` — public FPL API and pydantic types
+- `team_import.py` — squad, bank, free transfers, selling-price estimates, snapshots
+- `metrics/` — per-player scores (`compute.py`) and projected points (`combine.py`)
+- `optimise.py` — PuLP transfer, XI and captain solve
+- `agent/` — queue (`queue.py`), run (`runner.py`), chip advice (`chips.py`)
+- `explain/` — template text; the LLM explainer is optional and off by default
+- `stats/` — market, insights, squad and season reports
+- `db/` — Postgres connection plus `repos.py` and `stats_repo.py`
+- `settings.py`, `constants.py`
+
+## `api` (`api/src/api/`)
+
+`main.py` mounts the routers and starts the in-process agent poll loop (`worker.py`). `auth.py` verifies the Supabase JWT. `services.py` orchestrates `fplcore`.
+
+- `routers/public.py` — `GET /public/team/{entry_id}`
+- `routers/suggestions.py` — `POST /suggestions` (guests are locked to horizon 1 and default weights)
+- `routers/players.py`, `routers/stats.py`, `routers/meta.py`, `routers/health.py`
+- `routers/me.py` — profile, team import, account delete
+- `routers/agent.py` — rerun and run polling
+- `routers/internal.py` — `POST /internal/agent/drain`
+
+## `web` (Next.js 16 App Router)
+
+Read `web/AGENTS.md` before using Next.js APIs.
+
+- `app/(site)/` — `/`, `/try/[entryId]`, `/dashboard` (plus `/squad`, `/market`, `/season`, `/insights`), `/settings`, `/players`, `/onboarding`, `/how-it-works`
+- `app/login`, `app/auth/callback` — Google sign-in
+- `components/programme/` — shared editorial UI (pitch, plans, forms)
+- `components/dashboard/` — signed-in dashboard and stats
+- `lib/api.ts` — FastAPI client; `lib/server/` — server data and actions; `lib/supabase/` — session
+
+```bash
+uv run pytest -q
+uv run --package api uvicorn api.main:app --reload --port 8000
+uv run python -m ingest.run bootstrap
+cd web && pnpm dev
+```

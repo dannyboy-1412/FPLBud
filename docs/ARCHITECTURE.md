@@ -116,16 +116,17 @@ Repo layout (monorepo): `web/`, `api/`, `ingest/`, `fplcore/` (`client`, `metric
 
 ## 3. Ingestion schedule
 
-Run from GitHub Actions cron. It's free, needs no always-on server, and the regular writes keep the free Supabase project active. Cron is in UTC.
+Run from GitHub Actions cron. It's free, needs no always-on server, and the regular writes keep the free Supabase project active. Cron is in UTC. The workflow reads `DATABASE_URL` from a repository Actions secret; a scheduled run with that secret empty exits in a few seconds.
+
+FPL does not publish a poll interval. The cron follows the clocks they do publish, instead of fetching every 2 hours. Times below are UTC. In British Summer Time the same slots fall about an hour later in the UK, still after the event they are waiting for.
 
 | Job | When | Calls | Notes |
 |---|---|---|---|
-| `bootstrap` | every 2 h | 1 | Upserts players, teams, gameweeks and positions. On the first run each day, also writes `player_daily_snapshots` (price, ownership, transfers). |
-| `fixtures` | every 6 h, hourly on match days | 1 | Picks up FDR changes and rescheduled or blank fixtures. |
-| `element_summaries` | daily at 03:00 UTC (14:00 AEDT), and again once `events[].data_checked` flips true after a GW | ~667 at about 3/s, roughly 4 min | Upserts `player_gameweek_stats`. Only fetch players whose `minutes` changed since the last run to cut the calls. |
-| `metrics` | after any of the above | 0 | Recomputes `player_metrics` for `computed_for_gw` = next GW … next+5, with `horizon=1`. Older metric and match rows outside the rolling window are pruned. Bumps `data_version`. |
-| Pre-deadline | 2 h and 30 min before `deadline_time` | 1 + delta | Catches late injury news (`chance_of_playing_*`, `news`). |
-| `agent_rerun` | after `metrics` (only when `data_version` changed), plus the 2 h pre-deadline run, plus once after the deadline when new picks are visible | 1 entry fetch per tracked team after the deadline only | Enqueues runs for **signed-in users with a saved team** whose `profiles.last_active_at` is within `AGENT_TRACKING_WINDOW_DAYS` (default 30), then drains the queue in the same Action (§6A.6). |
+| `prices` | daily 00:20 UTC | bootstrap + fixtures | Sits after the 00:00 UK price change. Upserts players, teams, gameweeks and the fixture list, then recomputes metrics. The first bootstrap of a UTC day also writes `player_daily_snapshots`. |
+| `lock` | daily 09:15 UTC | bootstrap + fixtures + element summaries, or a short exit | Runs the full pull only when this UK date is the day after a gameweek's last kickoff. FPL confirms that gameweek at 09:00 UK. On any other morning inside the 48 hours before a deadline, it runs the pre-deadline pull instead. Otherwise it exits without calling FPL. |
+| `pre_deadline` | Friday 08:00 and 18:00 UTC, and the 09:15 UTC slot while a deadline is inside 48 hours | bootstrap | A blank Friday does no work. Refreshes flags and prices, recomputes metrics, then `agent_rerun` with trigger `pre_deadline`. |
+| `metrics` | at the end of each of the above | 0 | Recomputes `player_metrics` for `computed_for_gw` = next GW … next+5, with `horizon=1`. Older metric and match rows outside the rolling window are pruned. Bumps `data_version`. |
+| `agent_rerun` | after the lock run and after a pre-deadline run that actually fetched | 0 until a post-deadline import | Enqueues runs for **signed-in users with a saved team** whose `profiles.last_active_at` is within `AGENT_TRACKING_WINDOW_DAYS` (default 30), then drains the queue in the same Action (§6A.6). |
 
 ## 4. Metrics
 

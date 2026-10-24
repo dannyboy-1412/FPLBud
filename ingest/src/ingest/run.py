@@ -26,6 +26,7 @@ from fplcore.db.repos import (
 )
 from fplcore.metrics.compute import compute_player_metrics
 from fplcore.settings import get_settings
+from ingest.schedule import deadline_is_soon, is_lock_morning
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("ingest")
@@ -188,6 +189,87 @@ async def drain_queue(limit: int = 50) -> int:
     return processed
 
 
+async def job_prices() -> None:
+    """Daily run after the 00:00 UK price change. One fixtures fetch rides along."""
+    await job_bootstrap()
+    await job_fixtures()
+    await job_metrics()
+
+
+async def job_lock(*, only_if_due: bool = False) -> None:
+    """Full refresh on the morning FPL locks the gameweek, then plans are rebuilt.
+
+    On other mornings this same slot refreshes flags when a deadline is inside
+    48 hours, so a midweek deadline is covered without a separate cron.
+    """
+    if only_if_due and not _lock_is_due():
+        if _deadline_is_due():
+            log.info("deadline inside 48h; running the pre-deadline ingest")
+            await job_pre_deadline()
+            return
+        log.info("not the morning after a gameweek's last match; skipping lock ingest")
+        return
+    await job_bootstrap()
+    await job_fixtures()
+    await job_element_summaries()
+    await job_metrics()
+    await job_agent_rerun("data_refresh")
+
+
+async def job_pre_deadline(*, only_if_due: bool = False) -> None:
+    """Injury flags in the 48 hours before a deadline, then a plan rebuild."""
+    if only_if_due and not _deadline_is_due():
+        log.info("next deadline is more than 48h away; skipping pre-deadline ingest")
+        return
+    await job_bootstrap()
+    await job_metrics()
+    await job_agent_rerun("pre_deadline")
+
+
+def _lock_is_due(now: datetime | None = None) -> bool:
+    moment = now or datetime.now(UTC)
+    with connect() as conn:
+        try:
+            season_id = current_season_id(conn)
+        except RuntimeError:
+            return False
+        rows = conn.execute(
+            """
+            select max(kickoff_time) as last_ko
+              from fixtures
+             where season_id = %s
+               and event is not null
+               and kickoff_time is not null
+             group by event
+            """,
+            [season_id],
+        ).fetchall()
+    kickoffs = [row["last_ko"] for row in rows if row["last_ko"] is not None]
+    return is_lock_morning(kickoffs, moment)
+
+
+def _deadline_is_due(now: datetime | None = None) -> bool:
+    moment = now or datetime.now(UTC)
+    with connect() as conn:
+        try:
+            season_id = current_season_id(conn)
+        except RuntimeError:
+            return False
+        row = conn.execute(
+            """
+            select deadline_time
+              from gameweeks
+             where season_id = %s
+               and deadline_time > %s
+             order by deadline_time
+             limit 1
+            """,
+            [season_id, moment],
+        ).fetchone()
+    deadline = row["deadline_time"] if row else None
+    return deadline_is_soon(deadline, moment)
+
+
 async def job_agent_rerun(trigger: str = "data_refresh") -> int:
     settings = get_settings()
     with connect(settings) as conn:
@@ -264,14 +346,29 @@ async def run_named(name: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FPLBud ingest")
-    parser.add_argument("job", choices=[*JOBS, "all", "drain"])
+    parser.add_argument("job", choices=[*JOBS, "all", "drain", "prices", "lock", "pre_deadline"])
     parser.add_argument("--trigger", default="data_refresh")
+    parser.add_argument(
+        "--if-due",
+        action="store_true",
+        help="For lock and pre_deadline, skip the run when FPL has nothing new to collect",
+    )
     args = parser.parse_args()
     if args.job == "drain":
         asyncio.run(drain_queue())
         return
     if args.job == "agent_rerun":
         asyncio.run(job_agent_rerun(args.trigger))
+        return
+    if args.job == "prices":
+        asyncio.run(job_prices())
+        _prune()
+        return
+    if args.job == "lock":
+        asyncio.run(job_lock(only_if_due=args.if_due))
+        return
+    if args.job == "pre_deadline":
+        asyncio.run(job_pre_deadline(only_if_due=args.if_due))
         return
     asyncio.run(run_named(args.job))
 

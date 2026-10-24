@@ -1,19 +1,21 @@
 name: ingest
 
-# Scheduled ingest is paused until the pipeline is finished.
-# Restore the cron block when unattended runs should start again:
-#   schedule:
-#     - cron: "0 */2 * * *"
-#     - cron: "0 */6 * * *"
-#     - cron: "0 3 * * *"
+# GitHub cron is UTC. These slots sit just after FPL's own clocks:
+# prices at 00:00 UK, and the gameweek lock at 09:00 UK the morning after the last match.
+# In British Summer Time the same UTC times land about an hour later locally.
 on:
+  schedule:
+    - cron: "20 0 * * *"
+    - cron: "15 9 * * *"
+    - cron: "0 8 * * 5"
+    - cron: "0 18 * * 5"
   workflow_dispatch:
     inputs:
       job:
         description: "Job to run"
         default: "all"
         type: choice
-        options: [all, bootstrap, fixtures, element_summaries, metrics, agent_rerun, drain]
+        options: [all, bootstrap, fixtures, element_summaries, metrics, agent_rerun, drain, prices, lock, pre_deadline]
 
 jobs:
   ingest:
@@ -33,20 +35,21 @@ jobs:
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is empty. Add it as a repository Actions secret (Supabase transaction pooler, port 6543)."
+            exit 1
+          fi
           JOB="${{ github.event.inputs.job }}"
-          if [ -z "$JOB" ]; then
-            MINUTE=$(date -u +%M)
-            HOUR=$(date -u +%H)
-            if [ "$HOUR" = "03" ]; then
-              uv run python -m ingest.run all
-              uv run python -m ingest.run agent_rerun --trigger data_refresh
-            elif [ $((10#$HOUR % 6)) -eq 0 ]; then
-              uv run python -m ingest.run bootstrap
-              uv run python -m ingest.run fixtures
-              uv run python -m ingest.run metrics
-            else
-              uv run python -m ingest.run bootstrap
-            fi
-          else
+          SCHEDULE="${{ github.event.schedule }}"
+          if [ -n "$JOB" ]; then
             uv run python -m ingest.run "$JOB"
+          elif [ "$SCHEDULE" = "20 0 * * *" ]; then
+            uv run python -m ingest.run prices
+          elif [ "$SCHEDULE" = "15 9 * * *" ]; then
+            uv run python -m ingest.run lock --if-due
+          elif [ "$SCHEDULE" = "0 8 * * 5" ] || [ "$SCHEDULE" = "0 18 * * 5" ]; then
+            uv run python -m ingest.run pre_deadline --if-due
+          else
+            echo "ingest was not given a job or a known schedule"
+            exit 1
           fi

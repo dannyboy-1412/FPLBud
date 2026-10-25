@@ -231,9 +231,43 @@ def upsert_fixtures(conn: Connection, fixtures: list[Fixture], season_id: str) -
         )
 
 
-def minutes_by_player(conn: Connection, season_id: str) -> dict[int, int]:
-    rows = conn.execute("select id, minutes from players where season_id = %s", [season_id])
-    return {int(r["id"]): int(r["minutes"]) for r in rows}
+def synced_history_minutes(conn: Connection, season_id: str) -> dict[int, int]:
+    rows = conn.execute(
+        """
+        select id, history_minutes
+          from players
+         where season_id = %s and history_minutes is not null
+        """,
+        [season_id],
+    )
+    return {int(row["id"]): int(row["history_minutes"]) for row in rows}
+
+
+def players_needing_history(
+    current_minutes: dict[int, int],
+    synced_minutes: dict[int, int],
+) -> list[int]:
+    """Players whose saved match history is behind their current season minutes.
+
+    Someone who has never played is skipped. There is nothing to store, and the
+    first minute they play selects them because no sync has been recorded.
+    """
+    return [
+        player_id
+        for player_id, minutes in current_minutes.items()
+        if minutes != synced_minutes.get(player_id) and (minutes > 0 or player_id in synced_minutes)
+    ]
+
+
+def mark_history_synced(conn: Connection, season_id: str, player_id: int, minutes: int) -> None:
+    conn.execute(
+        """
+        update players
+           set history_minutes = %s
+         where season_id = %s and id = %s
+        """,
+        [minutes, season_id, player_id],
+    )
 
 
 def round_points_from_history(history: list[HistoryRow]) -> list[tuple[int, int]]:

@@ -1,8 +1,11 @@
+from decimal import Decimal
+
 import pandas as pd
 
 from fplcore.metrics.combine import (
     availability,
     combined_score,
+    playing_share,
     projected_points,
     renormalise_weights,
 )
@@ -17,6 +20,10 @@ def test_renormalise_and_availability() -> None:
     assert availability(chance_of_playing_next_round=None, status="u", k=1) == 0.0
     assert projected_points(score=1.0, fixture_count=0, avail=1) == 0
     assert projected_points(score=1.0, fixture_count=1, avail=1) == 7.0
+    assert playing_share(0.9, 0) == 0.0
+    assert projected_points(score=1.0, fixture_count=1, avail=1, minutes=0) == 0
+    full = projected_points(score=0.5, fixture_count=1, avail=1, minutes=1)
+    assert projected_points(score=0.5, fixture_count=1, avail=1, minutes=0.5) == full * 0.5
 
 
 def test_compute_metrics_smoke() -> None:
@@ -56,6 +63,23 @@ def test_compute_metrics_smoke() -> None:
                 "expected_assists_per_90": 0.05,
                 "expected_goals_conceded_per_90": 1.4,
             },
+            {
+                "id": 3,
+                "team_id": 1,
+                "position_id": 1,
+                "form": 0.0,
+                "points_per_game": 0.0,
+                "now_cost": 45,
+                "minutes": 0,
+                "starts": 0,
+                "status": "a",
+                "chance_of_playing_next_round": None,
+                "transfers_in_event": 0,
+                "transfers_out_event": 0,
+                "expected_goals_per_90": 0.0,
+                "expected_assists_per_90": 0.0,
+                "expected_goals_conceded_per_90": 1.2,
+            },
         ]
     )
     history = pd.DataFrame(
@@ -86,6 +110,8 @@ def test_compute_metrics_smoke() -> None:
             for r in range(1, 6)
         ]
     )
+    for column in ("expected_goals", "expected_assists", "expected_goals_conceded"):
+        history[column] = history[column].map(Decimal)
     fixtures = pd.DataFrame(
         [
             {
@@ -109,17 +135,19 @@ def test_compute_metrics_smoke() -> None:
         hours_since_deadline=24,
     )
     gw7 = [r for r in rows if r.computed_for_gw == 7]
-    assert len(gw7) == 2
+    assert len(gw7) == 3
     haaland = next(r for r in gw7 if r.player_id == 1)
     assert haaland.fixture_count == 1
     assert haaland.fixture_score == 0.75
     assert haaland.home_score == 1.0
     assert haaland.form_score >= 0.5
+    keeper = next(r for r in gw7 if r.player_id == 3)
+    assert keeper.xgi_raw > 0
 
 
 def test_combined_score_uses_weights() -> None:
     score = combined_score(
         {"form": 1, "fixture": 0, "home": 0, "xgi": 0, "value": 0, "minutes": 0, "trend": 0},
-        {"form": 1, "fixture": 0, "home": 0, "xgi": 0},
+        {"form": 1, "fixture": 0, "home": 0, "xgi": 0, "value": 0, "minutes": 0},
     )
     assert abs(score - 1) < 1e-9

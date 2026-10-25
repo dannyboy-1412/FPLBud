@@ -39,17 +39,32 @@ def availability(
     return 1.0 - (1.0 - cop) * (0.5 ** (k - 1))
 
 
+def playing_share(minutes_score: float, season_minutes: int | None = None) -> float:
+    """How much of a projection a player keeps once start rate is applied.
+
+    Injury status is handled separately. A player who has not played this
+    season keeps none of it: an easy fixture is not evidence they will start.
+    ``season_minutes`` of None means that fact is unknown, so only the recent
+    start rate is used.
+    """
+    if season_minutes is not None and int(season_minutes) <= 0:
+        return 0.0
+    return min(max(float(minutes_score), 0.0), 1.0)
+
+
 def projected_points(
     *,
     score: float,
     fixture_count: int,
     avail: float,
+    minutes: float = 1.0,
     a: float = PROJ_A_FALLBACK,
     b: float = PROJ_B_FALLBACK,
 ) -> float:
     if fixture_count <= 0:
         return 0.0
-    return fixture_count * avail * (a + b * score)
+    playing = min(max(float(minutes), 0.0), 1.0)
+    return fixture_count * avail * playing * (a + b * score)
 
 
 def poisson_clean_sheet(xgc90: float) -> float:

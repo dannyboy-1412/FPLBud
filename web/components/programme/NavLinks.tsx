@@ -32,7 +32,6 @@ export function NavLinks() {
   return (
     <>
       <NavItem href="/dashboard" label="Dashboard" current={pathname.startsWith("/dashboard")} />
-      <NavItem href="/players" label="Players" current={pathname.startsWith("/players")} />
       <NavItem href="/how-it-works" label="How it works" current={pathname.startsWith("/how-it-works")} />
     </>
   );

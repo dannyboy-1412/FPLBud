@@ -3,8 +3,8 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "fixture": 0.25,
     "home": 0.10,
     "xgi": 0.35,
-    "value": 0.0,
-    "minutes": 0.0,
+    "value": 0.15,
+    "minutes": 0.15,
     "trend": 0.0,
 }
 

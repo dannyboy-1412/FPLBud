@@ -34,6 +34,7 @@ from fplcore.lineup import (
 from fplcore.metrics.combine import (
     availability,
     combined_score,
+    playing_share,
     projected_points,
     renormalise_weights,
 )
@@ -317,6 +318,7 @@ def ranked_players(
                 status=row["status"],
                 k=k,
             )),
+            minutes=playing_share(scores["minutes"], row.get("minutes")),
         )
     ranked = sorted(grouped.values(), key=lambda r: r["proj"], reverse=True)
     for i, rec in enumerate(ranked, start=1):
@@ -370,7 +372,7 @@ def load_opt_players(conn: Connection, snapshot: TeamSnapshot, weights: dict[str
     rows = list(
         conn.execute(
             """
-            select p.id, p.web_name, p.team_id, p.position_id, p.now_cost, p.status,
+            select p.id, p.web_name, p.team_id, p.position_id, p.now_cost, p.minutes, p.status,
                    p.chance_of_playing_next_round, p.can_transact, p.removed,
                    m.computed_for_gw, m.form_score, m.fixture_score, m.home_score, m.xgi_score,
                    m.value_score, m.minutes_score, m.trend_score, m.fixture_count
@@ -415,6 +417,7 @@ def load_opt_players(conn: Connection, snapshot: TeamSnapshot, weights: dict[str
             score=combined_score(scores, weights),
             fixture_count=int(row["fixture_count"]),
             avail=availability(chance_of_playing_next_round=row["chance_of_playing_next_round"], status=row["status"], k=max(k, 1)),
+            minutes=playing_share(scores["minutes"], row.get("minutes")),
         )
         if gw == next_gw:
             rec["scores_gw1"] = scores

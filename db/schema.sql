@@ -109,6 +109,7 @@ create table players (
   points_per_game numeric(4,1) not null,
   total_points  integer not null,
   minutes       integer not null,
+  history_minutes integer,                     -- season minutes last saved from element-summary; null = never fetched
   starts        integer not null,
   expected_goals              numeric(6,2) not null,
   expected_assists            numeric(6,2) not null,
@@ -215,7 +216,7 @@ create table public.profiles (
   fpl_entry_id  integer check (fpl_entry_id > 0),   -- entered once at onboarding; public team ID
   fpl_team_name text,                          -- cached for display
   weights       jsonb not null default
-    '{"form":0.30,"fixture":0.25,"home":0.10,"xgi":0.35,"value":0,"minutes":0,"trend":0}'
+    '{"form":0.30,"fixture":0.25,"home":0.10,"xgi":0.35,"value":0.15,"minutes":0.15,"trend":0}'
     check (jsonb_typeof(weights) = 'object'),
   default_horizon smallint not null default 3 check (default_horizon in (1,3,5)),
   max_hits      smallint not null default 1 check (max_hits between 0 and 3),

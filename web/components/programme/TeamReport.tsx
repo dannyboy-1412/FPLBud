@@ -1,7 +1,8 @@
 import { PlayerCell, StatTable } from "@/components/dashboard/stats/StatTable";
-import { signed } from "@/components/dashboard/stats/format";
 import { PitchSwitcher, type PitchLineup } from "@/components/programme/PitchSwitcher";
 import type { PlayerRow, PublicTeam, VarianceRow } from "@/lib/api";
+
+const CLEAR_RETURN_GAP = 0.5;
 
 const POSITIONS = [
   { id: 1, label: "Goalkeeper" },
@@ -47,16 +48,78 @@ export function SquadScore({ value, caption }: { value: number; caption: string 
   );
 }
 
-function varianceRows(players: VarianceRow[] | undefined) {
-  return (players ?? []).map((player) => ({
-    id: player.id,
-    cells: [
-      <PlayerCell key="n" player={player} />,
-      player.xgi.toFixed(1),
-      player.goals + player.assists,
-      signed(player.xgi_delta),
-    ],
-  }));
+function notableReturns(players: VarianceRow[] | undefined, direction: "short" | "ahead") {
+  return (players ?? []).filter((player) =>
+    direction === "short" ? player.xgi_delta >= CLEAR_RETURN_GAP : player.xgi_delta <= -CLEAR_RETURN_GAP,
+  );
+}
+
+function returnsPhrase(goals: number, assists: number) {
+  if (goals + assists === 0) return "No goals or assists yet";
+  const parts: string[] = [];
+  if (goals === 1) parts.push("1 goal");
+  else if (goals > 1) parts.push(`${goals} goals`);
+  if (assists === 1) parts.push("1 assist");
+  else if (assists > 1) parts.push(`${assists} assists`);
+  return parts.join(", ");
+}
+
+function ShareBar({ value, max }: { value: number; max: number }) {
+  const width = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <span className="block h-1.5 bg-paper-deep" aria-hidden>
+      <span className="block h-full bg-ink" style={{ width: `${width}%` }} />
+    </span>
+  );
+}
+
+function ReturnCompare({
+  players,
+  direction,
+  empty,
+}: {
+  players: VarianceRow[] | undefined;
+  direction: "short" | "ahead";
+  empty: string;
+}) {
+  const rows = notableReturns(players, direction);
+  if (rows.length === 0) {
+    return <p className="caption">{empty}</p>;
+  }
+  return (
+    <ul className="border-t border-ink">
+      {rows.map((player) => {
+        const actual = player.goals + player.assists;
+        const scale = Math.max(player.xgi, actual, 0.1);
+        const gap = Math.abs(player.xgi_delta).toFixed(1);
+        return (
+          <li key={player.id} className="py-3 border-b border-rule">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="min-w-0">
+                <PlayerCell player={player} />
+              </span>
+              <span className="shrink-0 text-sm font-semibold nums">
+                {direction === "short" ? `Short by ${gap}` : `Ahead by ${gap}`}
+              </span>
+            </div>
+            <div className="mt-2 space-y-1.5">
+              <div className="grid grid-cols-[6.25rem_1fr_2.25rem] items-center gap-x-3 text-sm">
+                <span className="text-ink-soft">Should have</span>
+                <ShareBar value={player.xgi} max={scale} />
+                <span className="nums text-right">{player.xgi.toFixed(1)}</span>
+              </div>
+              <div className="grid grid-cols-[6.25rem_1fr_2.25rem] items-center gap-x-3 text-sm">
+                <span className="text-ink-soft">Has</span>
+                <ShareBar value={actual} max={scale} />
+                <span className="nums text-right">{actual}</span>
+              </div>
+            </div>
+            <p className="caption mt-1.5">{returnsPhrase(player.goals, player.assists)}</p>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 export function TeamView({
@@ -84,14 +147,26 @@ export function TeamView({
       </div>
       <div className="grid md:grid-cols-2 gap-x-12 gap-y-10 mt-10">
         <section>
-          <p className="kicker mb-3">Underperforming</p>
-          <p className="caption mb-3">xGI ahead of actual goal involvements.</p>
-          <StatTable headers={["Player", "xGI", "G+A", "Δ"]} rows={varianceRows(team.underperforming)} />
+          <p className="kicker mb-3">Due a return</p>
+          <p className="caption mb-3">
+            Fewer goals and assists than their chances were worth. The points often catch up, so these are usually holds.
+          </p>
+          <ReturnCompare
+            players={team.underperforming}
+            direction="short"
+            empty="Nobody in the squad is clearly short of a return."
+          />
         </section>
         <section>
-          <p className="kicker mb-3">Overperforming</p>
-          <p className="caption mb-3">Involvements ahead of xGI.</p>
-          <StatTable headers={["Player", "xGI", "G+A", "Δ"]} rows={varianceRows(team.overperforming)} />
+          <p className="kicker mb-3">Running hot</p>
+          <p className="caption mb-3">
+            More goals and assists than their chances were worth. Fine to own. The extra points can cool off.
+          </p>
+          <ReturnCompare
+            players={team.overperforming}
+            direction="ahead"
+            empty="Nobody in the squad is clearly ahead of their chances."
+          />
         </section>
       </div>
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-x-12 gap-y-10 mt-10">

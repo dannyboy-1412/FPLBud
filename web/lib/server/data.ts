@@ -54,7 +54,7 @@ export async function getPublicTeam(entryId: number): Promise<PublicTeam> {
   return result;
 }
 
-export type PlayerFilters = {
+type PlayerFilters = {
   position?: number;
   maxCost: number;
   horizon: number;
@@ -86,7 +86,7 @@ export async function getPositionLeaders(): Promise<Record<number, PlayerRow[]>>
   return Object.fromEntries(POSITION_IDS.map((position, index) => [position, lists[index].players]));
 }
 
-export async function getPlayers(filters: PlayerFilters): Promise<{ players: PlayerRow[] }> {
+async function getPlayers(filters: PlayerFilters): Promise<{ players: PlayerRow[] }> {
   const token = await getAccessToken();
   if (token) return fetchPlayers(filters, token);
   return getPlayersPublic(filters);

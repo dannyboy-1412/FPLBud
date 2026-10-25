@@ -13,7 +13,7 @@ from fplcore.db.stats_repo import next_gw_id
 from fplcore.explain.factory import get_explainer
 from fplcore.explain.llm import LLMExplainer
 from fplcore.explain.protocol import HorizonResult
-from fplcore.metrics.combine import availability, combined_score, projected_points
+from fplcore.metrics.combine import availability, combined_score, playing_share, projected_points
 from fplcore.optimise import PlayerOpt, SolvedPlan, optimise_horizon
 from fplcore.settings import Settings, get_settings
 
@@ -38,7 +38,7 @@ def _player_opts(
     rows = list(
         conn.execute(
             """
-            select p.id, p.web_name, p.team_id, p.position_id, p.now_cost, p.status,
+            select p.id, p.web_name, p.team_id, p.position_id, p.now_cost, p.minutes, p.status,
                    p.chance_of_playing_next_round, p.can_transact, p.removed,
                    m.computed_for_gw, m.form_score, m.fixture_score, m.home_score, m.xgi_score,
                    m.value_score, m.minutes_score, m.trend_score, m.fixture_count, m.availability
@@ -85,7 +85,10 @@ def _player_opts(
             k=max(k, 1),
         )
         rec["proj"][gw] = projected_points(
-            score=score, fixture_count=int(row["fixture_count"]), avail=avail
+            score=score,
+            fixture_count=int(row["fixture_count"]),
+            avail=avail,
+            minutes=playing_share(scores["minutes"], row.get("minutes")),
         )
         if gw == next_gw:
             rec["scores_gw1"] = scores

@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from fplcore.constants import SQUAD_SCORE_HIGH_PERCENTILE, SQUAD_SCORE_LOW_PERCENTILE
-from fplcore.metrics.combine import availability, combined_score, projected_points
+from fplcore.metrics.combine import availability, combined_score, playing_share, projected_points
 from fplcore.stats.insights import finishing_variance, in_form
 
 XI_SIZE = 11
 REPORT_TOP_N = 5
+MIN_RETURN_GAP = 0.5
 SCORE_KEYS = ("form", "fixture", "home", "xgi", "value", "minutes", "trend")
 
 
@@ -29,6 +30,7 @@ def scores_from_metric_row(row: dict[str, Any]) -> dict[str, float]:
 
 
 def projection_for_row(row: dict[str, Any], weights: dict[str, float] | None) -> float:
+    season_minutes = int(row["minutes"]) if "minutes" in row and row["minutes"] is not None else None
     return projected_points(
         score=combined_score(scores_from_metric_row(row), weights),
         fixture_count=int(row.get("fixture_count") or 0),
@@ -37,6 +39,7 @@ def projection_for_row(row: dict[str, Any], weights: dict[str, float] | None) ->
             status=str(row.get("status") or "a"),
             k=1,
         ),
+        minutes=playing_share(float(row.get("minutes_score") or 0), season_minutes),
     )
 
 
@@ -118,9 +121,11 @@ def performing_players(recent: list[dict[str, Any]], squad_ids: set[int]) -> lis
 
 def underperforming_players(players: list[dict[str, Any]], squad_ids: set[int]) -> list[dict[str, Any]]:
     scoped = [row for row in players if int(row["id"]) in squad_ids]
-    return finishing_variance(scoped, n=REPORT_TOP_N)["underperformers"]
+    rows = finishing_variance(scoped, n=REPORT_TOP_N)["underperformers"]
+    return [row for row in rows if float(row["xgi_delta"]) >= MIN_RETURN_GAP]
 
 
 def overperforming_players(players: list[dict[str, Any]], squad_ids: set[int]) -> list[dict[str, Any]]:
     scoped = [row for row in players if int(row["id"]) in squad_ids]
-    return finishing_variance(scoped, n=REPORT_TOP_N)["overperformers"]
+    rows = finishing_variance(scoped, n=REPORT_TOP_N)["overperformers"]
+    return [row for row in rows if float(row["xgi_delta"]) <= -MIN_RETURN_GAP]

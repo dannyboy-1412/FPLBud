@@ -219,6 +219,8 @@ def build_snapshot(
                 "status": player.status,
                 "chance_of_playing_next_round": player.chance_of_playing_next_round,
                 "news": player.news,
+                "minutes": player.minutes,
+                "starts": player.starts,
                 "is_captain": pick.is_captain,
                 "is_vice_captain": pick.is_vice_captain,
                 "squad_position": pick.position,

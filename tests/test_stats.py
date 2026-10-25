@@ -184,8 +184,9 @@ def test_xi_expected_points_sums_projections() -> None:
             "fixture_score": 1,
             "home_score": 1,
             "xgi_score": 1,
-            "value_score": 0,
-            "minutes_score": 0,
+            "value_score": 1,
+            "minutes_score": 1,
+            "minutes": 900,
             "trend_score": 0,
             "fixture_count": 1,
             "status": "a",
@@ -194,6 +195,7 @@ def test_xi_expected_points_sums_projections() -> None:
     }
     result = xi_expected_points([1, 2], rows)
     assert result["players"][0]["id"] == 1
+    assert result["players"][0]["proj"] > 0
     assert result["players"][-1]["id"] == 2
     assert result["players"][-1]["proj"] == 0.0
     assert result["total"] == result["players"][0]["proj"]
@@ -207,15 +209,16 @@ def test_performing_and_underperforming_stay_inside_squad() -> None:
     players = [
         _player(id=1, web_name="Due", goals_scored=1, assists=0, expected_goal_involvements=5.0),
         _player(id=3, web_name="Hot", goals_scored=8, assists=2, expected_goal_involvements=1.0),
+        _player(id=4, web_name="Level", goals_scored=3, assists=0, expected_goal_involvements=3.2),
         _player(id=9, web_name="Other", goals_scored=0, assists=0, expected_goal_involvements=9.0),
         _player(id=10, web_name="Outside", goals_scored=12, assists=4, expected_goal_involvements=0.5),
     ]
     performing = performing_players(recent, {1})
-    under = underperforming_players(players, {1, 3})
-    over = overperforming_players(players, {1, 3})
+    under = underperforming_players(players, {1, 3, 4})
+    over = overperforming_players(players, {1, 3, 4})
     assert [p["id"] for p in performing] == [1]
-    assert [p["id"] for p in under] == [1, 3]
-    assert [p["id"] for p in over] == [3, 1]
+    assert [p["id"] for p in under] == [1]
+    assert [p["id"] for p in over] == [3]
 
 
 def test_parse_weights_query_none() -> None:

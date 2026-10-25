@@ -107,7 +107,7 @@ Repo layout (monorepo): `web/`, `api/`, `ingest/`, `fplcore/` (`client`, `metric
 |---|---|---|
 | Team import | Enter a team ID each visit. Public preview only; nothing stored except the shared 5-minute cache of public FPL responses (`entry_cache`) | Team ID saved to profile once, remembered |
 | Suggestions | **Next GW only**, via `POST /suggestions`. Server forces `horizon=1` and **default weights** (custom weights are ignored) | **Team agent**: three horizons (1/3/5), chip advice, XI, bench, captain, reasoning |
-| Metrics | Defaults only (form, fixture, home/away, xGI) | Custom weights, including the optional metrics, saved to profile |
+| Metrics | Defaults (form, fixture, home/away, xGI, value, minutes) | Custom weights, including transfer trend, saved to profile |
 | Background re-runs | None | Automatic re-runs after data refresh, pre-deadline and post-deadline |
 | Player explorer | ✓ (default weights) | ✓ (own weights) |
 | Rate limit | Per IP (`GUEST_RATE_LIMIT_PER_MINUTE`) | Per user (`USER_RATE_LIMIT_PER_MINUTE`), agent re-runs capped (`AGENT_RERUN_LIMIT_PER_HOUR`) |
@@ -140,13 +140,13 @@ All components are computed **per player, per upcoming GW k** (k = 1…6) and st
 | **Fixture difficulty** | for GW k: mean over that GW's fixtures of `ease = (5 − FDR)/4`, where FDR is `team_h_difficulty` if the player's team is home, else `team_a_difficulty` | `ease` (FDR 2→0.75, 3→0.5, 5→0) | **0.25** |
 | **Home/away** | share of the player's fixtures in GW k that are at home | 1 = home, 0 = away, 0.5 for a split double | **0.10** |
 | **Expected stats** | `xp90 = 0.6 × recent90 + 0.4 × season90`, shrunk to the position mean: `(m·xp90 + 270·prior)/(m+270)` where m = minutes. Points-weighted: `goal_pts[pos]·xG + 3·xA` (goal points GKP/DEF 6, MID 5, FWD 4). For GKP/DEF, add `4·exp(−xGC90)` as a clean-sheet proxy (Poisson P(0 conceded)). | percentile within position | **0.35** |
+| **Value for money** | `points_per_game / (now_cost/10)` | percentile within position | **0.15** |
+| **Minutes security** | `start_rate = starts in last 6 team matches / 6`, multiplied by `mean(min(minutes,90)/90 when started)` | direct (0–1) | **0.15** |
 
-### 4.2 Optional metrics (off by default, weight 0; the UI suggests 0.15 when one is switched on)
+### 4.2 Optional metric (off by default, weight 0; the UI suggests 0.15 when it is switched on)
 
 | Metric | Raw formula | Score |
 |---|---|---|
-| **Value for money** | `points_per_game / (now_cost/10)` | percentile within position |
-| **Minutes security** | `start_rate = starts in last 6 team matches / 6`, multiplied by `mean(min(minutes,90)/90 when started)` | direct (0–1) |
 | **Price/ownership trend** | `(transfers_in_event − transfers_out_event) / total_players`, plus the 7-day change in `now_cost` from snapshots. These counters reset each deadline, so divide by hours since the deadline. | percentile across all players |
 
 ### 4.3 Combining (per request)

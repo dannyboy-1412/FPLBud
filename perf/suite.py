@@ -33,6 +33,7 @@ from fplcore.llm import _parse_json_content, grounding_ok
 from fplcore.metrics.combine import (
     availability,
     combined_score,
+    playing_share,
     poisson_clean_sheet,
     projected_points,
 )
@@ -362,6 +363,7 @@ def _metric_jobs(world: World) -> list[Job]:
                     status=str(card["status"]),
                     k=1,
                 ),
+                minutes=playing_share(float(card["minutes_score"]), card.get("minutes")),
             )
             total += poisson_clean_sheet(1.1)
         return total

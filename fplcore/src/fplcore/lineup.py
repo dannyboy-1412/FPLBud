@@ -12,6 +12,8 @@ from fplcore.settings import Settings
 
 OPTIMISER_SUMMARY = "Starting XI from projected points for this gameweek."
 SUMMARY_LIMIT = 400
+# Bumped when XI rules change, so a stored lineup is rebuilt.
+LINEUP_RULES_VERSION = 2
 
 LINEUP_SYSTEM = """You pick a Fantasy Premier League starting XI from the 15 players in the squad JSON. You do not recommend transfers.
 
@@ -20,7 +22,8 @@ Rules:
 - Formation: exactly 1 goalkeeper, 3 to 5 defenders, 2 to 5 midfielders, 1 to 3 forwards.
 - captain_id and vice_id are different starters. The captain scores double. The vice scores as captain only if the captain plays 0 minutes.
 - bench order is the autosub order: the goalkeeper first, then outfield players in the order they should come on. An autosub must leave a legal formation.
-- Search for injuries, suspensions, press-conference minutes and rotation for these clubs. Do not invent team news. If search is thin, use projected_points, chance_of_playing_next_round and news.
+- Do not start a player with 0 league minutes while another player in the same position has minutes and is available. An easier fixture does not override that.
+- Search for injuries, suspensions, press-conference minutes and rotation for these clubs. Do not invent team news. If search is thin, use projected_points, chance_of_playing_next_round, minutes and news.
 - Return only JSON: {"starters": [], "bench": [], "captain_id": 0, "vice_id": 0, "summary": "one or two sentences"}.
 - summary may only mention players from this squad."""
 
@@ -29,11 +32,12 @@ def lineup_cache_hash(player_ids: list[int], weights: dict[str, Any]) -> str:
     """Identity of a stored XI: the 15 players and the saved weights.
 
     News, availability and projected points are left out on purpose. A result
-    stays until the squad, the weights, or the gameweek changes.
+    stays until the squad, the weights, the gameweek, or the XI rules change.
     """
     body = {
         "players": sorted(int(player_id) for player_id in player_ids),
         "weights": weights or {},
+        "rules": LINEUP_RULES_VERSION,
     }
     encoded = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -90,6 +94,8 @@ def build_lineup_dossier(
                 "status": player.get("status") or "",
                 "chance_of_playing_next_round": None if chance is None else int(chance),
                 "news": player.get("news") or "",
+                "minutes": int(player.get("minutes") or 0),
+                "starts": int(player.get("starts") or 0),
                 "fixtures": fixtures_by_team.get(team_id, []),
                 "projected_points": round(float(projections.get(element, 0.0)), 2),
             }
@@ -185,6 +191,59 @@ def validate_lineup(
     )
 
 
+def _listed_minutes(player: dict[str, Any]) -> int | None:
+    if "minutes" not in player:
+        return None
+    try:
+        return int(player["minutes"])
+    except (TypeError, ValueError):
+        return None
+
+
+def _available(player: dict[str, Any]) -> bool:
+    status = str(player.get("status") or "a")
+    if status in {"i", "s", "u", "n"}:
+        return False
+    chance = player.get("chance_of_playing_next_round")
+    if chance is None:
+        return status == "a"
+    try:
+        return int(chance) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def unused_starter_reasons(starters: list[int], dossier: list[dict[str, Any]]) -> list[str]:
+    """A player with no league minutes does not start ahead of a fit regular."""
+    by_id = {int(player["id"]): player for player in dossier if "id" in player}
+    reasons: list[str] = []
+    for starter_id in starters:
+        player = by_id.get(starter_id)
+        if player is None:
+            continue
+        minutes = _listed_minutes(player)
+        if minutes is None or minutes > 0:
+            continue
+        position = player.get("position")
+        regular = next(
+            (
+                other
+                for other in dossier
+                if int(other.get("id") or 0) != starter_id
+                and other.get("position") == position
+                and (_listed_minutes(other) or 0) > 0
+                and _available(other)
+            ),
+            None,
+        )
+        if regular is None:
+            continue
+        name = player.get("name") or str(starter_id)
+        other_name = regular.get("name") or str(regular.get("id"))
+        reasons.append(f"{name} has not played; start {other_name} instead")
+    return reasons
+
+
 def lineup_from_optimiser(players: list[PlayerOpt]) -> SuggestedLineup:
     """Pick the XI with the transfer solver locked to zero transfers."""
     solved = optimise_horizon(players, bank=0, free_transfers=0, horizon=1, max_hits=0)
@@ -235,7 +294,7 @@ async def _lineup_from_model(
     except LlmError:
         return lineup_from_optimiser(players)
     try:
-        return validate_lineup(raw, positions)
+        return _accept_model_lineup(raw, positions, dossier)
     except LineupRejected as exc:
         repair = json.dumps(
             {
@@ -251,6 +310,18 @@ async def _lineup_from_model(
     except LlmError:
         return lineup_from_optimiser(players)
     try:
-        return validate_lineup(fixed, positions)
+        return _accept_model_lineup(fixed, positions, dossier)
     except LineupRejected:
         return lineup_from_optimiser(players)
+
+
+def _accept_model_lineup(
+    payload: dict[str, Any],
+    positions: dict[int, int],
+    dossier: list[dict[str, Any]],
+) -> SuggestedLineup:
+    lineup = validate_lineup(payload, positions)
+    reasons = unused_starter_reasons(lineup.starters, dossier)
+    if reasons:
+        raise LineupRejected(reasons)
+    return lineup

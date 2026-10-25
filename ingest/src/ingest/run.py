@@ -16,10 +16,12 @@ from fplcore.db.repos import (
     current_season_id,
     log_ingest_finish,
     log_ingest_start,
+    mark_history_synced,
     maybe_daily_snapshots,
-    minutes_by_player,
+    players_needing_history,
     prune_retention,
     replace_metrics,
+    synced_history_minutes,
     upsert_bootstrap,
     upsert_element_history,
     upsert_fixtures,
@@ -78,20 +80,19 @@ async def job_element_summaries() -> None:
         conn.commit()
         try:
             sid = current_season_id(conn)
-            previous = minutes_by_player(conn, sid)
+            synced = synced_history_minutes(conn, sid)
             async with FplClient(settings) as client:
                 bootstrap = await client.bootstrap_static()
                 upsert_bootstrap(conn, bootstrap)
                 conn.commit()
-                to_fetch = [
-                    el.id
-                    for el in bootstrap.elements
-                    if previous.get(el.id) != el.minutes or el.id not in previous
-                ]
+                current = {el.id: el.minutes for el in bootstrap.elements}
+                to_fetch = players_needing_history(current, synced)
                 log.info("element-summary fetches: %s", len(to_fetch))
                 for player_id in to_fetch:
                     summary = await client.element_summary(player_id)
                     upsert_element_history(conn, sid, player_id, summary)
+                    mark_history_synced(conn, sid, player_id, current[player_id])
+                    conn.commit()
             log_ingest_finish(conn, run_id, ok=True, detail=f"fetched={len(to_fetch)}")
             conn.commit()
         except Exception as exc:

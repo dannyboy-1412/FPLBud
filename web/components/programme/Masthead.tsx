@@ -20,7 +20,6 @@ export function Masthead() {
             fallback={
               <>
                 <span className="font-medium">Dashboard</span>
-                <span className="font-medium">Players</span>
                 <span className="font-medium">How it works</span>
               </>
             }

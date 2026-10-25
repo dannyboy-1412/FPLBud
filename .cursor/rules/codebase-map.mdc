@@ -49,7 +49,7 @@ Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm 
 
 Read `web/AGENTS.md` before using Next.js APIs.
 
-- `app/(site)/` — `/`, `/try/[entryId]`, `/dashboard` (plus `/squad`, `/market`, `/season`, `/insights`), `/settings`, `/players`, `/onboarding`, `/how-it-works`
+- `app/(site)/` — `/`, `/try/[entryId]`, `/dashboard` (plus `/squad`, `/market`, `/season`, `/insights`), `/settings`, `/onboarding`, `/how-it-works`
 - `app/login`, `app/auth/callback` — Google sign-in
 - `components/programme/` — shared editorial UI (pitch, plans, forms)
 - `components/dashboard/` — signed-in dashboard and stats

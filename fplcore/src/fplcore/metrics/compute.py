@@ -36,6 +36,13 @@ class MetricRow:
     availability: float
 
 
+def _position_mean(values: np.ndarray) -> float:
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return 0.0
+    return float(finite.mean())
+
+
 def _ewma_points(points: list[float], alpha: float = FORM_EWMA_ALPHA) -> float:
     if not points:
         return 0.0
@@ -80,9 +87,14 @@ def compute_xgi_raw(players: pd.DataFrame, history: pd.DataFrame, last_rounds: l
         xa=("expected_assists", "sum"),
         xgc=("expected_goals_conceded", "sum"),
     )
-    recent90_xg = (agg["xg"] * 90.0 / agg["minutes"].clip(lower=1)).reindex(players["id"]).fillna(0.0)
-    recent90_xa = (agg["xa"] * 90.0 / agg["minutes"].clip(lower=1)).reindex(players["id"]).fillna(0.0)
-    recent90_xgc = (agg["xgc"] * 90.0 / agg["minutes"].clip(lower=1)).reindex(players["id"]).fillna(season_xgc90)
+    played = agg["minutes"].clip(lower=1)
+
+    def per90(column: str) -> pd.Series:
+        return players["id"].map(agg[column].astype(float) * 90.0 / played)
+
+    recent90_xg = per90("xg").fillna(0.0)
+    recent90_xa = per90("xa").fillna(0.0)
+    recent90_xgc = per90("xgc").fillna(season_xgc90)
 
     xp90_goal = 0.6 * recent90_xg.to_numpy() + 0.4 * season_xg90.to_numpy()
     xp90_assist = 0.6 * recent90_xa.to_numpy() + 0.4 * season_xa90.to_numpy()
@@ -98,9 +110,9 @@ def compute_xgi_raw(players: pd.DataFrame, history: pd.DataFrame, last_rounds: l
     for pos in players["position_id"].unique():
         mask = (players["position_id"] == pos).to_numpy()
         if mask.any():
-            prior_g[mask] = xp90_goal[mask].mean()
-            prior_a[mask] = xp90_assist[mask].mean()
-            prior_gc[mask] = xp90_gc[mask].mean()
+            prior_g[mask] = _position_mean(xp90_goal[mask])
+            prior_a[mask] = _position_mean(xp90_assist[mask])
+            prior_gc[mask] = _position_mean(xp90_gc[mask])
 
     xg90 = shrink(xp90_goal, prior_g)
     xa90 = shrink(xp90_assist, prior_a)
@@ -110,7 +122,7 @@ def compute_xgi_raw(players: pd.DataFrame, history: pd.DataFrame, last_rounds: l
     raw = goal_pts * xg90 + 3.0 * xa90
     defenderish = players["position_id"].isin([1, 2]).to_numpy()
     raw = np.where(defenderish, raw + 4.0 * np.exp(-np.clip(xgc90, 0, None)), raw)
-    return pd.Series(raw, index=players.index)
+    return pd.Series(raw, index=players.index).replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
 def compute_minutes_raw(players: pd.DataFrame, history: pd.DataFrame, last_team_matches: int = 6) -> pd.Series:

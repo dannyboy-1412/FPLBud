@@ -116,6 +116,14 @@ body {
 .stat-xl { font-family: var(--font-fraunces), Georgia, serif; font-size: 3.5rem; line-height: 1; font-weight: 700; font-variant-numeric: lining-nums tabular-nums; }
 .stat { font-family: var(--font-fraunces), Georgia, serif; font-size: 1.5rem; line-height: 1; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
 .masthead-type { font-family: var(--font-fraunces), Georgia, serif; font-size: 4.5rem; line-height: 0.95; font-weight: 800; letter-spacing: -0.02em; }
+.landing-title {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: clamp(2.6rem, 7vw, 4.5rem);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
 .ui { font-size: 0.875rem; line-height: 1.4; font-weight: 500; }
 .nums { font-variant-numeric: tabular-nums lining-nums; }
 .prose-body { font-family: var(--font-newsreader), Georgia, serif; font-size: 1.0625rem; line-height: 1.6; }

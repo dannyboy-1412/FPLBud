@@ -50,7 +50,7 @@ def next_gw_metric_rows(conn: Connection, player_ids: list[int] | None = None) -
     season = current_season_id(conn)
     next_gw = next_gw_id(conn, season)
     sql = """
-        select p.id, p.web_name, p.status, p.chance_of_playing_next_round,
+        select p.id, p.web_name, p.minutes, p.status, p.chance_of_playing_next_round,
                m.form_score, m.fixture_score, m.home_score, m.xgi_score,
                m.value_score, m.minutes_score, m.trend_score, m.fixture_count
           from players p

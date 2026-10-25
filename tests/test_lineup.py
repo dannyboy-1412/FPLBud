@@ -6,6 +6,7 @@ from fplcore.lineup import (
     choose_lineup,
     lineup_cache_hash,
     lineup_from_optimiser,
+    unused_starter_reasons,
     validate_lineup,
 )
 from fplcore.llm import LlmError
@@ -182,6 +183,58 @@ async def test_search_failure_skips_repair() -> None:
     assert lineup.source == "optimiser"
     assert model.searches == 1
     assert model.repairs == 0
+
+
+def _keepers() -> list[dict]:
+    return [
+        {
+            "id": 1,
+            "name": "Wright",
+            "position": "GKP",
+            "minutes": 0,
+            "status": "a",
+            "chance_of_playing_next_round": 100,
+        },
+        {
+            "id": 2,
+            "name": "Raya",
+            "position": "GKP",
+            "minutes": 720,
+            "status": "a",
+            "chance_of_playing_next_round": 100,
+        },
+    ]
+
+
+def test_unused_goalkeeper_is_not_a_valid_start() -> None:
+    reasons = unused_starter_reasons(_legal()["starters"], _keepers())
+    assert reasons
+    assert "Wright" in reasons[0]
+    assert "Raya" in reasons[0]
+
+
+async def test_model_that_starts_an_unused_goalkeeper_is_replaced() -> None:
+    played = _legal()
+    played["starters"] = [2, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14]
+    played["bench"] = [1, 7, 12, 15]
+    model = _Model(_legal(), played)
+    lineup = await choose_lineup(
+        _fifteen(), _keepers(), settings=_settings(), allow_llm=True, client=model
+    )
+    assert lineup.source == "llm"
+    assert 2 in lineup.starters
+    assert 1 in lineup.bench
+    assert model.repairs == 1
+
+
+async def test_repeated_unused_goalkeeper_falls_back_to_projection() -> None:
+    model = _Model(_legal(), _legal())
+    lineup = await choose_lineup(
+        _fifteen(), _keepers(), settings=_settings(), allow_llm=True, client=model
+    )
+    assert lineup.source == "optimiser"
+    assert 2 in lineup.starters
+    assert 1 in lineup.bench
 
 
 async def test_missing_model_config_uses_projected_xi() -> None:

@@ -9,9 +9,8 @@ export default function HowItWorksPage() {
       </p>
       <h2 className="mt-10">§ 2 · Score</h2>
       <p className="mt-3">
-        Each player is marked on form, fixture difficulty, home advantage and expected stats. Optional marks cover
-        value, minutes security and transfer trend. Scores are percentiles within position, then mixed with your
-        weights.
+        Each player is marked on form, fixture difficulty, home advantage, expected stats, value and minutes
+        security. Transfer trend is optional. Scores are percentiles within position, then mixed with your weights.
       </p>
       <div className="border border-rule p-4 my-4 font-[family-name:var(--font-instrument)] nums">
         S = Σ wᵢ × scoreᵢ / Σ wᵢ

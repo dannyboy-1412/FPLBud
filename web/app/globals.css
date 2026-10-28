@@ -215,7 +215,7 @@ body {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 .pitch-toggle-thumb {
@@ -224,7 +224,7 @@ body {
   top: 3px;
   bottom: 3px;
   left: 3px;
-  width: calc(50% - 3px);
+  width: calc(33.333% - 2px);
   border-radius: 999px;
   background: var(--vermilion);
   transition: transform 180ms var(--ease);
@@ -232,6 +232,10 @@ body {
 
 .pitch-toggle-thumb.is-suggested {
   transform: translateX(100%);
+}
+
+.pitch-toggle-thumb.is-transfers {
+  transform: translateX(200%);
 }
 
 .pitch-toggle button {
@@ -260,6 +264,152 @@ body {
 .pitch-toggle button:disabled {
   color: rgba(244, 251, 246, 0.38);
   cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .pitch-toggle {
+    padding-inline: 8px;
+  }
+
+  .pitch-toggle button {
+    padding: 7px 8px;
+    font-size: 0.75rem;
+  }
+}
+
+.transfer-options {
+  display: grid;
+  gap: 10px;
+}
+
+.transfer-option {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--paper-bright);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transfer-option.is-recommended {
+  grid-template-columns: 9rem 1fr;
+  padding: 18px 18px 16px;
+  border: 2px solid var(--vermilion);
+  background: var(--paper);
+}
+
+.transfer-option.is-viewing:not(.is-recommended) {
+  border-color: var(--ink);
+}
+
+.transfer-option:focus-visible {
+  outline: 2px solid var(--vermilion);
+  outline-offset: 3px;
+}
+
+.transfer-pct {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: flex-start;
+  column-gap: 2px;
+}
+
+.transfer-pct-value {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 0.85;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.transfer-option.is-recommended .transfer-pct-value {
+  font-size: 4rem;
+  color: var(--vermilion);
+}
+
+.transfer-pct-mark {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.transfer-option.is-recommended .transfer-pct-mark {
+  color: var(--vermilion);
+  font-size: 1.5rem;
+}
+
+.transfer-pct-label {
+  flex-basis: 100%;
+  margin-top: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.transfer-option.is-recommended .transfer-pct-label {
+  color: var(--vermilion-ink);
+}
+
+.transfer-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transfer-title {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.transfer-option.is-recommended .transfer-title {
+  font-size: 1.75rem;
+}
+
+.transfer-reason {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.transfer-meter {
+  display: block;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--paper-deep, rgba(16, 36, 26, 0.08));
+  overflow: hidden;
+}
+
+.transfer-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+}
+
+.transfer-option.is-recommended .transfer-meter > span {
+  background: var(--vermilion);
+}
+
+@media (max-width: 720px) {
+  .transfer-option,
+  .transfer-option.is-recommended {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 }
 
 .pitch-frame > :last-child:not(.pitch-unit) {

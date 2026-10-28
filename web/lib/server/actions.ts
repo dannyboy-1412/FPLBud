@@ -3,7 +3,15 @@
 import { cookies } from "next/headers";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { api, ApiError, isTeamNotFound, type PublicTeam, type SuggestedXi, type Weights } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  isTeamNotFound,
+  type PublicTeam,
+  type SuggestedTransfers,
+  type SuggestedXi,
+  type Weights,
+} from "@/lib/api";
 import { getPublicTeam } from "@/lib/server/data";
 import { getAccessToken } from "@/lib/server/session";
 import { PENDING_ENTRY_COOKIE, PENDING_ENTRY_MAX_AGE } from "@/lib/pending-entry";
@@ -115,6 +123,22 @@ export async function fetchSuggestedXi(): Promise<{ lineup: SuggestedXi } | { er
       signal: AbortSignal.timeout(60_000),
     });
     return { lineup };
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "We can't reach the press room right now." };
+  }
+}
+
+export async function fetchSuggestedTransfers(): Promise<{ advice: SuggestedTransfers } | { error: string }> {
+  const token = await getAccessToken();
+  if (!token) return { error: "Sign in required." };
+  try {
+    const advice = await api<SuggestedTransfers>("/me/suggested-transfers", {
+      method: "POST",
+      token,
+      signal: AbortSignal.timeout(60_000),
+    });
+    return { advice };
   } catch (err) {
     if (err instanceof ApiError) return { error: err.message };
     return { error: "We can't reach the press room right now." };

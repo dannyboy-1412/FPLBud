@@ -27,7 +27,7 @@ export async function loadMeta(): Promise<Meta> {
   return getMeta();
 }
 
-const PUBLIC_TEAM_SHAPE = 2;
+const PUBLIC_TEAM_SHAPE = 5;
 
 async function fetchPublicTeam(
   entryId: number,

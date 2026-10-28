@@ -435,6 +435,68 @@ def save_suggested_lineup(
     )
 
 
+def get_suggested_transfers(
+    conn: Connection,
+    user_id: Any,
+    entry_id: int,
+    gameweek: int,
+    squad_hash: str,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        select advice from suggested_transfers
+         where user_id = %s and entry_id = %s and gameweek = %s and squad_hash = %s
+        """,
+        [user_id, entry_id, gameweek, squad_hash],
+    ).fetchone()
+    if row is None:
+        return None
+    advice = row["advice"]
+    return advice if isinstance(advice, dict) else None
+
+
+def save_suggested_transfers(
+    conn: Connection,
+    *,
+    user_id: Any,
+    entry_id: int,
+    gameweek: int,
+    squad_hash: str,
+    advice: dict[str, Any],
+) -> None:
+    conn.execute(
+        """
+        insert into suggested_transfers (user_id, entry_id, gameweek, squad_hash, advice)
+        values (%s, %s, %s, %s, %s)
+        on conflict (user_id, entry_id, gameweek, squad_hash) do update
+          set advice = excluded.advice,
+              created_at = now()
+        """,
+        [user_id, entry_id, gameweek, squad_hash, Json(advice)],
+    )
+
+
+def get_squad_score_reason(conn: Connection, team_hash: str) -> str | None:
+    row = conn.execute(
+        "select reason from squad_score_reasons where team_hash = %s",
+        [team_hash],
+    ).fetchone()
+    if row is None or not row["reason"]:
+        return None
+    return str(row["reason"])
+
+
+def save_squad_score_reason(conn: Connection, team_hash: str, reason: str) -> None:
+    conn.execute(
+        """
+        insert into squad_score_reasons (team_hash, reason)
+        values (%s, %s)
+        on conflict (team_hash) do nothing
+        """,
+        [team_hash, reason],
+    )
+
+
 def put_entry_cache(conn: Connection, entry_id: int, event: int, payload: dict[str, Any]) -> None:
     conn.execute(
         """
@@ -532,6 +594,11 @@ def prune_retention(conn: Connection) -> dict[str, int]:
         counts["suggested_lineups"] = _delete(
             conn,
             "delete from suggested_lineups where gameweek < %s",
+            [windows.next_gw],
+        )
+        counts["suggested_transfers"] = _delete(
+            conn,
+            "delete from suggested_transfers where gameweek < %s",
             [windows.next_gw],
         )
     counts["player_daily_snapshots"] = _delete(

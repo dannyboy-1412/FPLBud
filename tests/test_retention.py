@@ -67,6 +67,7 @@ def test_prune_drops_rows_outside_windows() -> None:
     assert deletes["player_gameweek_stats"] == [12]
     assert deletes["player_metrics"] == [20, 25]
     assert deletes["suggested_lineups"] == [20]
+    assert deletes["suggested_transfers"] == [20]
     assert deletes["entry_cache"] == [ENTRY_CACHE_PRUNE_SECONDS]
     assert deletes["agent_runs"] == [AGENT_RUN_KEEP_HOURS]
     assert deletes["data_versions"] == [LOG_RETENTION_DAYS]

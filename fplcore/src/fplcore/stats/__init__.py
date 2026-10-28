@@ -10,6 +10,7 @@ from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_t
 from fplcore.stats.report import (
     overperforming_players,
     performing_players,
+    score_starting_xi,
     squad_score_for_xi,
     underperforming_players,
     xi_element_ids,
@@ -37,6 +38,7 @@ __all__ = [
     "performing_players",
     "price_movers",
     "price_pressure",
+    "score_starting_xi",
     "season_rows",
     "season_summary",
     "set_piece_takers",

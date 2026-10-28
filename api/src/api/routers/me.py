@@ -11,7 +11,12 @@ from pydantic import BaseModel, Field
 from api.auth import current_user
 from api.deps import db_conn, get_settings_dep
 from api.limiter import limiter
-from api.services import build_suggested_xi, load_merged_entry, snapshot_from_cache
+from api.services import (
+    build_suggested_transfers,
+    build_suggested_xi,
+    load_merged_entry,
+    snapshot_from_cache,
+)
 from api.worker import kickoff
 from fplcore.agent.queue import enqueue_run
 from fplcore.client import FplClient, FplNotFoundError
@@ -79,6 +84,17 @@ async def suggested_xi(
     settings: Settings = Depends(get_settings_dep),
 ) -> dict:
     return await build_suggested_xi(conn, settings, user["id"])
+
+
+@router.post("/me/suggested-transfers")
+@limiter.limit("6/hour")
+async def suggested_transfers(
+    request: Request,
+    user: dict = Depends(current_user),
+    conn: Connection = Depends(db_conn),
+    settings: Settings = Depends(get_settings_dep),
+) -> dict:
+    return await build_suggested_transfers(conn, settings, user["id"])
 
 
 @router.put("/me")

@@ -18,10 +18,7 @@ export function Masthead() {
         <nav className="flex gap-5 justify-end items-center">
           <Suspense
             fallback={
-              <>
-                <span className="font-medium">Dashboard</span>
-                <span className="font-medium">How it works</span>
-              </>
+              <span className="font-medium">Dashboard</span>
             }
           >
             <NavLinks />

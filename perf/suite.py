@@ -95,6 +95,7 @@ from fplcore.team_import import (
     estimate_selling_price,
     merged_from_payloads,
 )
+from fplcore.transfer_advice import advice_from_plans
 from perf.harness import Job, ProfileEntry, Report, Result, format_seconds, measure, profile
 from perf.report import write_report
 from perf.workloads import World, load
@@ -114,6 +115,7 @@ REQUIRED_MODULES = (
     "fplcore.stats.report",
     "fplcore.explain",
     "fplcore.lineup",
+    "fplcore.transfer_advice",
     "fplcore.gameweeks",
     "fplcore.agent.chips",
     "fplcore.agent.queue",
@@ -190,6 +192,7 @@ def build_jobs(world: World, cleanups: list[Callable[[], None]]) -> list[Job]:
     jobs.extend(_stats_jobs(world))
     jobs.extend(_explain_jobs())
     jobs.extend(_lineup_jobs(world))
+    jobs.extend(_transfer_jobs())
     jobs.extend(_gameweek_jobs(world))
     jobs.extend(_chip_jobs(world))
     jobs.extend(_llm_jobs())
@@ -745,6 +748,50 @@ def _lineup_jobs(world: World) -> list[Job]:
             "fplcore.lineup",
             "one 15-player squad: validate the XI, build the dossier, hash the weights",
             lineup,
+        )
+    ]
+
+
+def _transfer_jobs() -> list[Job]:
+    roll = SolvedPlan(
+        transfers_in=0,
+        hits=0,
+        objective=40,
+        projected_gw1=40,
+        squad_ids=list(range(1, 16)),
+        xi_ids=list(range(1, 12)),
+        bench_ids=[12, 13, 14, 15],
+        captain_id=1,
+        vice_id=2,
+        bank_after=5,
+    )
+    move = TransferMove(1, 99, "Out", "In", 0, {})
+    one = SolvedPlan(
+        transfers_in=1,
+        hits=0,
+        objective=44,
+        projected_gw1=44,
+        squad_ids=[99, *range(2, 16)],
+        xi_ids=[99, *range(2, 12)],
+        bench_ids=[12, 13, 14, 15],
+        captain_id=99,
+        vice_id=2,
+        bank_after=5,
+        moves=[move],
+    )
+
+    def advise() -> object:
+        advice = advice_from_plans({0: roll, 1: one}, free_transfers=1, unavailable_ids=set())
+        if advice.action != "transfer" or advice.moves[0].in_id != 99:
+            raise RuntimeError("transfer advice did not spend a clear free transfer")
+        return advice
+
+    return [
+        _job(
+            "advise_one_free_transfer",
+            "fplcore.transfer_advice",
+            "one clear move against a roll, using the banked-transfer threshold",
+            advise,
         )
     ]
 

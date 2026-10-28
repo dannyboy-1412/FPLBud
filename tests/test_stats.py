@@ -1,20 +1,27 @@
 import pytest
 from fastapi import HTTPException
 
+from api.services import public_team_view
 from api.weights_query import parse_weights_query
 from fplcore.models import ChipUsed, EntryHistoryRow
 from fplcore.stats.insights import defensive_leaders, finishing_variance
 from fplcore.stats.market import price_pressure
 from fplcore.stats.report import (
+    StarterOutlook,
+    explain_squad_score,
     overperforming_players,
     performing_players,
+    projection_for_row,
+    score_starting_xi,
     squad_score_for_xi,
     underperforming_players,
     xi_element_ids,
     xi_expected_points,
+    xi_projections,
 )
 from fplcore.stats.season import captain_returns, season_rows, season_summary
 from fplcore.stats.squad import template_threats
+from fplcore.team_import import TeamSnapshot
 
 
 def _player(**overrides: object) -> dict:
@@ -174,6 +181,173 @@ def test_squad_score_short_xi_pads_with_zeros() -> None:
 
 def test_squad_score_ignores_players_past_the_xi() -> None:
     assert squad_score_for_xi([2.5] * 11 + [100.0], _spread_field()) == 3.4
+
+
+def _outlook(name: str, projection: float, **flags: bool) -> StarterOutlook:
+    return StarterOutlook(name=name, projection=projection, **flags)
+
+
+def test_squad_score_reason_for_a_premium_xi_names_who_is_counted_twice() -> None:
+    starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(10)]
+    scored = explain_squad_score(starters, _spread_field())
+    assert scored.value == 10.0
+    assert scored.reason == (
+        "A premium XI this week. "
+        "Haaland is counted twice and projects with the best of the field."
+    )
+
+
+def test_squad_score_reason_for_an_ordinary_xi_explains_the_middle() -> None:
+    scored = explain_squad_score([_outlook(f"P{i}", 2.5) for i in range(11)], _spread_field())
+    assert scored.value == 3.4
+    assert scored.reason == (
+        "Closer to an ordinary XI than a premium one. "
+        "The starters project around the middle of players with a fixture."
+    )
+
+
+def test_squad_score_reason_for_a_weak_xi_says_why_it_is_at_the_bottom() -> None:
+    scored = explain_squad_score([_outlook(f"P{i}", 1.0) for i in range(11)], _spread_field())
+    assert scored.value == 0.0
+    assert scored.reason == (
+        "At the bottom of the scale. "
+        "Every starter projects below a typical player with a fixture."
+    )
+
+
+def test_squad_score_reason_names_blanks_holding_back_a_strong_captain() -> None:
+    starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(7)]
+    starters += [_outlook(name, 0.0, blank=True) for name in ("Gordon", "Watkins", "Wood")]
+    scored = explain_squad_score(starters, _spread_field())
+    assert scored.value == 5.5
+    assert scored.reason == (
+        "Around the middle of the scale. "
+        "Haaland is counted twice, but Gordon, Watkins and Wood have no fixture this week."
+    )
+
+
+def test_squad_score_reason_keeps_a_blank_when_the_xi_is_still_premium() -> None:
+    starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(9)]
+    starters.append(_outlook("Gordon", 0.0, blank=True))
+    scored = explain_squad_score(starters, _spread_field())
+    assert scored.reason == (
+        "A premium XI this week. "
+        "Haaland is counted twice and projects with the best of the field. "
+        "Gordon has no fixture this week."
+    )
+
+
+def test_squad_score_reason_collapses_a_long_list_of_blanks() -> None:
+    starters = [_outlook(f"P{i}", 3.94) for i in range(6)]
+    starters += [
+        _outlook(name, 0.0, blank=True) for name in ("Gordon", "Watkins", "Wood", "Isak", "Wissa")
+    ]
+    scored = explain_squad_score(starters, _spread_field())
+    assert "Gordon, Watkins and 3 others have no fixture this week." in scored.reason
+
+
+def test_squad_score_reason_names_a_player_who_is_unlikely_to_play() -> None:
+    starters = [_outlook("Saka", 1.0, unlikely=True)] + [_outlook(f"P{i}", 2.5) for i in range(10)]
+    scored = explain_squad_score(starters, _spread_field())
+    assert scored.reason.endswith("Saka is unlikely to play.")
+
+
+def test_squad_score_reason_names_a_player_who_has_not_been_starting() -> None:
+    starters = [_outlook("Wright", 0.0, not_starting=True)] + [_outlook(f"P{i}", 2.5) for i in range(10)]
+    scored = explain_squad_score(starters, _spread_field())
+    assert scored.reason.endswith("Wright has not been starting.")
+
+
+def test_squad_score_reason_for_starters_above_the_middle_of_the_field() -> None:
+    scored = explain_squad_score([_outlook(f"P{i}", 3.2) for i in range(11)], _spread_field())
+    assert scored.value == 6.6
+    assert scored.reason == (
+        "Above the middle of the scale. "
+        "Every starter projects above a typical player with a fixture."
+    )
+
+
+def test_squad_score_reason_for_a_flat_field_and_for_no_field() -> None:
+    flat = explain_squad_score([_outlook(f"P{i}", 3.0) for i in range(11)], [3.0, 3.0, 3.0])
+    assert flat.value == 5.0
+    assert flat.reason == "Players with a fixture all project the same, so the XI sits in the middle."
+    empty = explain_squad_score([], [])
+    assert empty.value == 0.0
+    assert empty.reason == "Not enough players have a fixture to place this XI."
+
+
+def test_squad_score_reason_for_a_short_xi() -> None:
+    scored = explain_squad_score([_outlook("Haaland", 4.0)], _spread_field())
+    assert scored.value == 0.0
+    assert scored.reason == "At the bottom of the scale. Only 1 of the 11 starters is set."
+
+
+def _score_row(name: str, **overrides: object) -> dict:
+    row: dict[str, object] = {
+        "web_name": name,
+        "form_score": 0.5,
+        "fixture_score": 0.5,
+        "home_score": 0.5,
+        "xgi_score": 0.5,
+        "value_score": 0.5,
+        "minutes_score": 1,
+        "minutes": 900,
+        "trend_score": 0,
+        "fixture_count": 1,
+        "status": "a",
+        "chance_of_playing_next_round": 100,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_score_starting_xi_names_the_blank_and_matches_the_number() -> None:
+    rows = {i: _score_row(f"P{i}", xgi_score=(i % 10) / 10) for i in range(1, 40)}
+    rows[1] = _score_row("Gordon", fixture_count=0)
+    xi = list(range(1, 12))
+    scored = score_starting_xi(xi, rows)
+    field = [projection_for_row(row, None) for row in rows.values()]
+    assert scored.value == squad_score_for_xi(xi_projections(xi, rows), field)
+    assert "Gordon" in scored.reason
+    assert "no fixture" in scored.reason
+
+
+def test_score_starting_xi_names_an_injury_and_a_player_without_minutes() -> None:
+    rows = {i: _score_row(f"P{i}", xgi_score=(i % 10) / 10) for i in range(1, 40)}
+    rows[1] = _score_row("Saka", status="i", chance_of_playing_next_round=0)
+    injured = score_starting_xi(list(range(1, 12)), rows)
+    assert "Saka is unlikely to play." in injured.reason
+
+    rows[1] = _score_row("Wright", minutes=0)
+    idle = score_starting_xi(list(range(1, 12)), rows)
+    assert "Wright has not been starting." in idle.reason
+
+
+def test_public_team_view_includes_the_squad_score_reason() -> None:
+    snapshot = TeamSnapshot(
+        entry_id=1,
+        event=1,
+        season_id="2025/26",
+        name="Team",
+        manager="Manager",
+        overall_rank=1,
+        picks=[],
+        bank=0,
+        team_value=1000,
+        free_transfers=1,
+        selling_prices={},
+        chips_available=[],
+        chips_used=[],
+        active_chip=None,
+        flags=[],
+    )
+    view = public_team_view(
+        snapshot,
+        squad_score=6.2,
+        squad_score_reason="Above the middle of the scale.",
+    )
+    assert view["squad_score"] == 6.2
+    assert view["squad_score_reason"] == "Above the middle of the scale."
 
 
 def test_xi_expected_points_sums_projections() -> None:

@@ -150,6 +150,7 @@ export type PublicTeam = {
   estimated: boolean;
   caveat: string;
   squad_score: number;
+  squad_score_reason: string;
   underperforming: VarianceRow[];
   overperforming: VarianceRow[];
 };
@@ -213,6 +214,40 @@ export type SuggestedXi = {
   vice_id: number;
   summary: string;
   source: "llm" | "optimiser";
+};
+
+export type SuggestedTransferMove = {
+  out_id: number;
+  in_id: number;
+  out_name: string;
+  in_name: string;
+};
+
+export type TransferOption = {
+  action: "roll" | "transfer";
+  moves: SuggestedTransferMove[];
+  recommended_pct: number;
+  reason: string;
+  chosen: boolean;
+  starters: number[];
+  bench: number[];
+  captain_id: number | null;
+  vice_id: number | null;
+  incomings: PublicTeam["squad_players"];
+};
+
+export type SuggestedTransfers = {
+  action: "roll" | "transfer";
+  free_transfers: number;
+  moves: SuggestedTransferMove[];
+  starters: number[];
+  bench: number[];
+  captain_id: number | null;
+  vice_id: number | null;
+  incomings: PublicTeam["squad_players"];
+  summary: string;
+  source: "llm" | "policy";
+  options: TransferOption[];
 };
 
 export type StatPlayer = {

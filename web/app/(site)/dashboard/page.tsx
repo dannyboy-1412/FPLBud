@@ -4,6 +4,9 @@ import { TeamViewSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
 import { getMyTeam, getPositionLeaders } from "@/lib/server/data";
 
+// 30 minutes. Returning to Team reuses this render instead of fetching it again.
+export const unstable_dynamicStaleTime = 1800;
+
 export default function DashboardPage() {
   return (
     <SectionError>

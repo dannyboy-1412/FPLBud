@@ -35,7 +35,10 @@ export function ReportHeader({
   );
 }
 
-export function SquadScore({ value, caption }: { value: number; caption: string }) {
+const SCORE_FALLBACK = "Projected points this gameweek, starting XI plus captain.";
+
+export function SquadScore({ value, reason }: { value: number; reason?: string }) {
+  const explanation = reason?.trim() || SCORE_FALLBACK;
   return (
     <div className="mt-8 pb-8 border-b border-rule">
       <p className="kicker">Squad score</p>
@@ -43,7 +46,7 @@ export function SquadScore({ value, caption }: { value: number; caption: string 
         <span>{scoreLabel(value)}</span>
         <span className="caption">/10</span>
       </p>
-      <p className="caption mt-2">{caption}</p>
+      <p className="caption mt-3 max-w-xl">{explanation}</p>
     </div>
   );
 }
@@ -138,10 +141,7 @@ export function TeamView({
       {showHeader ? (
         <ReportHeader name={team.name} manager={team.manager} overallRank={team.overall_rank} />
       ) : null}
-      <SquadScore
-        value={team.squad_score}
-        caption="Projected points this gameweek, starting XI plus captain."
-      />
+      <SquadScore value={team.squad_score} reason={team.squad_score_reason} />
       <div className="mt-8">
         <PitchSwitcher team={team} lineup={lineup} />
       </div>

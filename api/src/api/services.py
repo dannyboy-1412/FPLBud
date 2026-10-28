@@ -19,9 +19,13 @@ from fplcore.db import stats_repo
 from fplcore.db.repos import (
     current_season_id,
     get_entry_cache,
+    get_squad_score_reason,
     get_suggested_lineup,
+    get_suggested_transfers,
     put_entry_cache,
+    save_squad_score_reason,
     save_suggested_lineup,
+    save_suggested_transfers,
 )
 from fplcore.explain.template import TemplateExplainer
 from fplcore.lineup import (
@@ -51,13 +55,13 @@ from fplcore.stats.insights import (
 )
 from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_transfers
 from fplcore.stats.report import (
+    SquadScore,
     overperforming_players,
-    projection_for_row,
-    squad_score_for_xi,
+    score_starting_xi,
     underperforming_players,
     xi_element_ids,
-    xi_projections,
 )
+from fplcore.stats.score_reason import request_squad_score_reason, squad_team_hash
 from fplcore.stats.season import captain_returns, season_rows, season_summary
 from fplcore.stats.squad import (
     captaincy_board,
@@ -66,6 +70,12 @@ from fplcore.stats.squad import (
     template_threats,
 )
 from fplcore.team_import import TeamSnapshot, build_snapshot, merged_from_payloads
+from fplcore.transfer_advice import (
+    PLAN_HORIZON,
+    choose_transfers,
+    stored_advice_ok,
+    transfer_cache_hash,
+)
 
 
 async def load_merged_entry(conn: Connection, client: FplClient, entry_id: int) -> tuple[dict[str, Any], Any]:
@@ -111,7 +121,12 @@ def snapshot_from_cache(
     )
 
 
-def public_team_view(snapshot: TeamSnapshot, *, squad_score: float = 0.0) -> dict[str, Any]:
+def public_team_view(
+    snapshot: TeamSnapshot,
+    *,
+    squad_score: float = 0.0,
+    squad_score_reason: str = "",
+) -> dict[str, Any]:
     return {
         "entry_id": snapshot.entry_id,
         "name": snapshot.name,
@@ -131,6 +146,7 @@ def public_team_view(snapshot: TeamSnapshot, *, squad_score: float = 0.0) -> dic
         "estimated": True,
         "caveat": "Transfers already made for the next gameweek are hidden until the deadline.",
         "squad_score": squad_score,
+        "squad_score_reason": squad_score_reason,
     }
 
 
@@ -140,15 +156,9 @@ def _xi_metric_rows(conn: Connection, snapshot: TeamSnapshot) -> tuple[list[int]
     return xi_ids, {int(row["id"]): row for row in rows}
 
 
-def compute_squad_score(conn: Connection, snapshot: TeamSnapshot) -> float:
+def compute_squad_score(conn: Connection, snapshot: TeamSnapshot) -> SquadScore:
     xi_ids, rows_by_id = _xi_metric_rows(conn, snapshot)
-    return _squad_score(xi_ids, rows_by_id)
-
-
-def _squad_score(xi_ids: list[int], rows_by_id: dict[int, dict[str, Any]]) -> float:
-    projections = xi_projections(xi_ids, rows_by_id, DEFAULT_WEIGHTS)
-    field = [projection_for_row(row, DEFAULT_WEIGHTS) for row in rows_by_id.values()]
-    return squad_score_for_xi(projections, field)
+    return score_starting_xi(xi_ids, rows_by_id, DEFAULT_WEIGHTS)
 
 
 def team_short_names(conn: Connection) -> dict[int, str]:
@@ -175,13 +185,17 @@ def with_pitch_details(
     return detailed
 
 
-def public_team_payload(
+def _finish_public_team(
     conn: Connection,
     snapshot: TeamSnapshot,
-    *,
-    team_names: dict[int, str] | None = None,
+    scored: SquadScore,
+    team_names: dict[int, str] | None,
 ) -> dict[str, Any]:
-    view = public_team_view(snapshot, squad_score=compute_squad_score(conn, snapshot))
+    view = public_team_view(
+        snapshot,
+        squad_score=scored.value,
+        squad_score_reason=scored.reason,
+    )
     names = team_names if team_names is not None else team_short_names(conn)
     view["squad_players"] = with_pitch_details(view["squad_players"], names, stats_repo.next_event_fixtures(conn))
     squad_ids = {int(player["element"]) for player in snapshot.squad_players}
@@ -189,6 +203,50 @@ def public_team_payload(
     view["underperforming"] = underperforming_players(rows, squad_ids)
     view["overperforming"] = overperforming_players(rows, squad_ids)
     return view
+
+
+def public_team_payload(
+    conn: Connection,
+    snapshot: TeamSnapshot,
+    *,
+    team_names: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    return _finish_public_team(conn, snapshot, compute_squad_score(conn, snapshot), team_names)
+
+
+async def cached_openrouter_reason(
+    conn: Connection,
+    squad_players: list[dict[str, Any]],
+    scored: SquadScore,
+    settings: Settings,
+) -> str:
+    """Reuse the OpenRouter sentence for this squad. A new squad asks again."""
+    team_hash = squad_team_hash(squad_players)
+    stored = get_squad_score_reason(conn, team_hash)
+    if stored:
+        return stored
+    if not settings.llm_api_key or not settings.llm_model:
+        return scored.reason
+    if not try_llm_cap(conn, settings.llm_daily_call_cap):
+        conn.commit()
+        return scored.reason
+    written = await request_squad_score_reason(scored, settings=settings)
+    if written:
+        save_squad_score_reason(conn, team_hash, written)
+    conn.commit()
+    return written or scored.reason
+
+
+async def public_team_with_reason(
+    conn: Connection,
+    snapshot: TeamSnapshot,
+    settings: Settings,
+    *,
+    team_names: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    scored = compute_squad_score(conn, snapshot)
+    reason = await cached_openrouter_reason(conn, snapshot.squad_players, scored, settings)
+    return _finish_public_team(conn, snapshot, replace(scored, reason=reason), team_names)
 
 
 def build_horizon_plan(
@@ -684,6 +742,157 @@ async def build_suggested_xi(conn: Connection, settings: Settings, user_id: Any)
         gameweek=gameweek,
         squad_hash=squad_hash,
         lineup=stored,
+    )
+    conn.commit()
+    return stored
+
+
+def _squad_notes(squad_players: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    notes: list[dict[str, Any]] = []
+    for player in squad_players:
+        notes.append(
+            {
+                "id": int(player["element"]),
+                "status": player.get("status") or "a",
+                "chance_of_playing_next_round": player.get("chance_of_playing_next_round"),
+                "news": player.get("news") or "",
+                "minutes": int(player.get("minutes") or 0),
+            }
+        )
+    return notes
+
+
+def _transfer_opts(conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float]) -> list[PlayerOpt]:
+    loaded = {player.id: player for player in load_opt_players(conn, snapshot, weights, horizon=PLAN_HORIZON)}
+    for player in snapshot.squad_players:
+        element = int(player["element"])
+        if element in loaded:
+            continue
+        selling = snapshot.selling_prices.get(str(element), player.get("now_cost") or 0)
+        loaded[element] = PlayerOpt(
+            id=element,
+            web_name=str(player.get("web_name") or ""),
+            team_id=int(player["team_id"]),
+            position_id=int(player["position_id"]),
+            cost=int(player.get("now_cost") or 0),
+            sell=int(selling),
+            in_squad=True,
+            can_in=False,
+            locked=False,
+            proj=[0.0] * PLAN_HORIZON,
+            scores_gw1={},
+        )
+    return list(loaded.values())
+
+
+def _transfer_incomings(conn: Connection, season_id: str, player_ids: list[int]) -> list[dict[str, Any]]:
+    if not player_ids:
+        return []
+    rows = list(
+        conn.execute(
+            """
+            select id, web_name, team_id, position_id, now_cost, status,
+                   chance_of_playing_next_round, news
+              from players
+             where season_id = %s and id = any(%s)
+            """,
+            [season_id, player_ids],
+        )
+    )
+    by_id: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        by_id[int(row["id"])] = {
+            "element": int(row["id"]),
+            "web_name": row["web_name"],
+            "team_id": int(row["team_id"]),
+            "position_id": int(row["position_id"]),
+            "now_cost": int(row["now_cost"]),
+            "status": row["status"] or "a",
+            "chance_of_playing_next_round": row["chance_of_playing_next_round"],
+            "news": row["news"] or "",
+            "is_captain": False,
+            "is_vice_captain": False,
+            "squad_position": 0,
+        }
+    ordered = [by_id[player_id] for player_id in player_ids if player_id in by_id]
+    if len(ordered) != len(player_ids):
+        return []
+    return with_pitch_details(ordered, team_short_names(conn), stats_repo.next_event_fixtures(conn))
+
+
+async def build_suggested_transfers(conn: Connection, settings: Settings, user_id: Any) -> dict[str, Any]:
+    """Suggest a roll or free transfers for the signed-in squad.
+
+    A stored row for this user, team, gameweek, squad, bank and free-transfer
+    count is returned as-is and does not reserve a model call.
+    """
+    profile = conn.execute(
+        "select fpl_entry_id, weights from public.profiles where id = %s",
+        [user_id],
+    ).fetchone()
+    if not profile or not profile["fpl_entry_id"]:
+        raise HTTPException(status_code=400, detail="no team saved")
+    entry_id = int(profile["fpl_entry_id"])
+    weights = profile["weights"] or DEFAULT_WEIGHTS
+    try:
+        async with FplClient(settings) as client:
+            payload, bootstrap = await load_merged_entry(conn, client, entry_id)
+    except FplNotFoundError:
+        raise HTTPException(status_code=404, detail="team not found") from None
+    snapshot = snapshot_from_cache(payload, bootstrap, current_season_id(conn))
+    if len(snapshot.squad_players) != 15:
+        raise HTTPException(status_code=422, detail="squad is incomplete")
+    player_ids = [int(player["element"]) for player in snapshot.squad_players]
+    squad_hash = transfer_cache_hash(
+        player_ids,
+        weights,
+        int(snapshot.free_transfers),
+        int(snapshot.bank),
+        snapshot.selling_prices,
+    )
+    gameweek = stats_repo.next_gw_id(conn, snapshot.season_id)
+    squad_ids = set(player_ids)
+    cached = get_suggested_transfers(conn, user_id, entry_id, gameweek, squad_hash)
+    if cached is not None and stored_advice_ok(cached, squad_ids, int(snapshot.free_transfers)):
+        return cached
+
+    allow_llm = bool(settings.llm_api_key and settings.llm_model)
+    if allow_llm:
+        allow_llm = try_llm_cap(conn, settings.llm_daily_call_cap)
+        if allow_llm:
+            conn.commit()
+    try:
+        advice = await choose_transfers(
+            _transfer_opts(conn, snapshot, weights),
+            bank=int(snapshot.bank),
+            free_transfers=int(snapshot.free_transfers),
+            squad_notes=_squad_notes(snapshot.squad_players),
+            team_names={team.id: team.short_name for team in bootstrap.teams},
+            fixtures_by_team=stats_repo.next_event_fixtures(conn),
+            settings=settings,
+            allow_llm=allow_llm,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="could not build a transfer") from exc
+    stored = advice.to_dict()
+    incoming_ids: list[int] = []
+    for option in stored["options"]:
+        for move in option["moves"]:
+            incoming_ids.append(int(move["in_id"]))
+    cards = {int(player["element"]): player for player in _transfer_incomings(conn, snapshot.season_id, incoming_ids)}
+    for option in stored["options"]:
+        option["incomings"] = [cards[int(move["in_id"])] for move in option["moves"] if int(move["in_id"]) in cards]
+    chosen = next((option for option in stored["options"] if option.get("chosen")), None)
+    stored["incomings"] = list(chosen["incomings"]) if chosen else []
+    if not stored_advice_ok(stored, squad_ids, int(snapshot.free_transfers)):
+        raise HTTPException(status_code=503, detail="could not build a transfer")
+    save_suggested_transfers(
+        conn,
+        user_id=user_id,
+        entry_id=entry_id,
+        gameweek=gameweek,
+        squad_hash=squad_hash,
+        advice=stored,
     )
     conn.commit()
     return stored

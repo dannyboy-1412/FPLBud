@@ -68,9 +68,6 @@ async function LandingBody() {
             return [<div key={`${n}-rule`} className="col-rule" aria-hidden="true" />, step];
           })}
         </div>
-        <Link href="/how-it-works" className="btn-text mt-6 inline-flex">
-          How the scores are built
-        </Link>
       </section>
     </>
   );

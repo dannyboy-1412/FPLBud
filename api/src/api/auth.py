@@ -114,11 +114,3 @@ def optional_user(
         return current_user(authorization, settings, conn)
     except HTTPException:
         return None
-
-
-def require_internal(
-    x_internal_secret: str | None = Header(default=None, alias="X-Internal-Secret"),
-    settings: Settings = Depends(get_settings_dep),
-) -> None:
-    if not settings.internal_api_secret or x_internal_secret != settings.internal_api_secret:
-        raise HTTPException(status_code=401, detail="internal secret required")

@@ -43,7 +43,6 @@ Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm 
 - `routers/players.py`, `routers/stats.py`, `routers/meta.py`, `routers/health.py`
 - `routers/me.py` — profile, team import, account delete
 - `routers/agent.py` — rerun and run polling
-- `routers/internal.py` — `POST /internal/agent/drain`
 
 ## `web` (Next.js 16 App Router)
 

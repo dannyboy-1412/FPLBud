@@ -5,7 +5,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY fplcore ./fplcore
-COPY ingest ./ingest
 COPY api ./api
 
 RUN uv sync --frozen --no-dev --package api

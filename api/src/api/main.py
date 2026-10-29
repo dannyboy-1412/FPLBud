@@ -11,7 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from api.limiter import limiter
-from api.routers import agent, health, internal, me, meta, players, public, stats, suggestions
+from api.routers import agent, health, me, meta, players, public, stats, suggestions
 from api.worker import poll_loop
 from fplcore.db import close_pool, create_pool
 from fplcore.settings import get_settings
@@ -59,7 +59,6 @@ def create_app() -> FastAPI:
     app.include_router(stats.router)
     app.include_router(me.router)
     app.include_router(agent.router)
-    app.include_router(internal.router)
     return app
 
 

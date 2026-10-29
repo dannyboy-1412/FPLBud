@@ -1,0 +1,138 @@
+---
+description: Orientation for the api package — FastAPI routes, JWT, rate limits, and request wiring
+globs: api/**/*.py,tests/test_suggested_xi_route.py,tests/test_suggested_transfers_route.py
+alwaysApply: false
+---
+
+# api
+
+`api` is the FastAPI service. It verifies Supabase JWTs, rate-limits requests, and turns HTTP into calls on `fplcore`. It is stateless apart from the Postgres pool and the in-process agent poll loop. Domain formulas, the MILP, the queue SQL, and ingest jobs do not live here.
+
+Read `docs/ARCHITECTURE.md` before changing auth, guest versus signed-in behaviour, or the way a request reaches the optimiser or the agent.
+
+Run it from the repo root:
+
+```bash
+uv run --package api uvicorn api.main:app --reload --port 8000
+```
+
+`api` depends on `fplcore` only (`api/pyproject.toml`). Do not import `ingest`. A manual queue drain is `python -m ingest.run drain`.
+
+## Where it sits
+
+```
+Next.js (Bearer access token, or no token for guests)
+        → api.auth (JWT)
+        → api.routers (status codes, rate limits, pydantic bodies)
+        → api.services (load squad, weights, call fplcore)
+        → fplcore (optimise, agent.queue, stats, client, db)
+```
+
+`main.create_app` mounts every router, CORS from `Settings.cors_origins`, and slowapi. The lifespan opens the psycopg pool (`DB_POOL_MIN_SIZE`–`DB_POOL_MAX_SIZE`, default 1–8), starts `worker.poll_loop`, and closes the pool on shutdown. Sentry initialises when `SENTRY_DSN` is set.
+
+`deps.db_conn` yields a pooled connection. `deps.get_settings_dep` returns the cached `Settings`.
+
+## Directory map
+
+Source root: `api/src/api/`.
+
+| Module | Responsibility |
+|---|---|
+| `main.py` | App factory, CORS, lifespan, `run()` on port 8000. |
+| `auth.py` | `decode_access_token`, `current_user`, `optional_user`. |
+| `limiter.py` | slowapi key: a bearer token's last 24 characters, otherwise the client IP. |
+| `worker.py` | `process_one` claims one `agent_runs` row and calls `run_claimed`. `poll_loop` every `AGENT_POLL_INTERVAL_SECONDS` (5s). `kickoff` schedules one pass on the server loop so a response can return 202 first. Hourly `prune_retention`. |
+| `services.py` | Orchestration: entry cache, snapshots, guest plans, player lists, stats payloads, suggested XI and transfers. |
+| `weights_query.py` | Parses the `weights` query on insights. Unknown keys and negative numbers are 422. |
+| `routers/health.py` | `GET /health` — last `ingest_runs` row and queue depth. |
+| `routers/meta.py` | `GET /meta` — gameweeks, default weights, descriptions, `data_version`. |
+| `routers/public.py` | `GET /public/team/{entry_id}` — preview only. Nothing is written to `team_snapshots`. |
+| `routers/suggestions.py` | `POST /suggestions` — synchronous plan. |
+| `routers/players.py` | `GET /players`, `GET /players/{id}`. |
+| `routers/stats.py` | Market, insights, `GET /me/stats/squad`, `GET /me/stats/season`. |
+| `routers/me.py` | Profile, team save, import, suggested XI/transfers, account delete. |
+| `routers/agent.py` | Rerun, latest run, `GET /agent/runs/{run_id}`. |
+
+## Request path
+
+1. Auth dependency runs. Missing or bad bearer tokens on `current_user` are 401. `optional_user` treats a bad token as a guest.
+2. `current_user` ensures a `public.profiles` row and bumps `last_active_at` at most once an hour.
+3. The handler validates the body, applies guest locks, and calls `services`.
+4. `load_merged_entry` always fetches bootstrap and `entry/{id}`. Picks, history and transfers come from `entry_cache` when the row is younger than `ENTRY_CACHE_TTL_SECONDS` (300). A miss fetches them and caches. `FplNotFoundError` becomes 404 `"team not found"`.
+5. Synchronous plans call `build_horizon_plan` → `optimise_horizon` → `TemplateExplainer`. They do not enqueue `agent_runs`. An empty metric table returns 503 `"metrics not ready"`.
+6. Signed-in import and rerun call `enqueue_run`, commit, `BackgroundTasks.add_task(kickoff)`, and return the `run_id` immediately. `kickoff` uses `asyncio.create_task` because a sync background task runs off the event loop.
+
+JWT verification tries the project JWKS (`ES256` / `RS256` / `HS256`, `aud=authenticated`, `exp` and `sub` required) and falls back to `SUPABASE_JWT_SECRET` (HS256). A JWKS outage is remembered for the process (`_jwks_failed`).
+
+Account delete (`DELETE /me`) calls the Supabase auth admin API with `SUPABASE_SERVICE_ROLE_KEY`. That key stays server-side. Cascades in the database remove the rest.
+
+## Guest and signed-in locks
+
+These locks are this package's job. Do not push them down into `fplcore`.
+
+| Route | Who | What the handler forces |
+|---|---|---|
+| `POST /suggestions` | Guest (`optional_user` is None) | `horizon=1` and `DEFAULT_WEIGHTS`. Client weights and horizon are ignored. `lock_ids` and `exclude_ids` from the body are still passed through. |
+| `POST /suggestions` | Signed in | Body horizon 1–6, weights, max hits, locks and excludes. Instant preview, not the agent. |
+| `GET /players` | Guest | Default weights. Response includes `using_defaults: true`. |
+| `GET /players` | Signed in | Weights from `profiles`. |
+| `GET /stats/insights` | Either | Explicit `weights` query wins; else profile weights; else defaults. |
+| `GET /stats/market`, `GET /players/{id}`, `GET /public/team/{id}`, `GET /meta`, `GET /health` | Public | No JWT. |
+| `/me/*`, `/agent/runs/{id}`, `POST /me/agent/rerun` | JWT | 401 without a valid token. A run whose `user_id` is not `sub` is 404. |
+
+`PUT /me/team` validates the entry id against FPL, upserts `tracked_entries`, saves `fpl_entry_id` on the profile, stores a snapshot, and enqueues trigger `import`. `POST /me/team/import` requires a saved entry id, applies optional `{free_transfers, bank, squad}` overrides, and enqueues `import` with status 202. `PUT /me` persists weights, `default_horizon` and `max_hits`; a weights change enqueues `user_rerun`.
+
+The background agent always writes horizons 1, 3 and 5 inside `fplcore.agent.runner`. `profiles.default_horizon` does not change that set.
+
+`POST /me/suggested-xi` and `POST /me/suggested-transfers` are on-demand, signed-in, and cached per user, entry, gameweek and squad hash. They call `lineup.choose_lineup` and `transfer_advice.choose_transfers`. They are not a substitute for the three-horizon agent run.
+
+`GET /me/stats/squad` uses the live public squad (via the entry cache) and profile weights. `GET /me/stats/season` fills missing finished-GW picks into `entry_event_picks` through `stats_repo`.
+
+`GET /public/team/{entry_id}` builds an unsaved snapshot, scores the XI, and may ask OpenRouter for a squad-score sentence (`cached_openrouter_reason`). The response sets `estimated: true` and states that next-GW transfers stay hidden until the deadline.
+
+## Rate limits
+
+`limiter.py` buckets bearers by token suffix and guests by IP. Decorators currently use literal strings, in parallel with `Settings`:
+
+- `POST /suggestions`: `10/minute` (settings field `guest_rate_limit_per_minute` defaults to 10 and is not what the decorator reads).
+- `PUT /me`, `PUT /me/team`, `POST /me/team/import`: `30/minute`.
+- `POST /me/agent/rerun`, suggested XI, suggested transfers: `6/hour`.
+- Rerun also counts `user_rerun` rows in the last hour against `agent_rerun_limit_per_hour` and returns 429 when that cap is hit.
+
+Changing the Settings integers does not change the decorator strings. Update both when the limit should move.
+
+## Boundaries
+
+Put a new URL, status code, auth dependency, or rate limit in `routers/` and keep the handler thin. Shared loading and payload shaping go in `services.py`.
+
+Solver constraints, metric formulas, FT and selling-price maths, queue claim SQL, and explainer sentences belong in `fplcore`. Scheduled fetches belong in `ingest`. DDL belongs in `db/`. The browser client that calls these routes is `web/lib/api.ts`.
+
+`services.py` is allowed to choose weights, horizons and which fplcore function to call. It is the wrong place for a new scoring formula.
+
+## Invariants
+
+- Guests never get a `team_snapshot` or an `agent_runs` row. Only `PUT /me/team` and `POST /me/team/import` write those, and both require `current_user`.
+- Import and rerun return as soon as the row is queued. The poll loop and `kickoff` do the solve. Do not run `optimise_horizon` for all three horizons inside the request.
+- `GET /agent/runs/{run_id}` must keep the owner check (`run.user_id != user.id` → 404). RLS is not a substitute: the API connects as a role that bypasses RLS.
+- `enqueue_run` dedupes a queued or running run for the same user and entry. Repeat clicks should return that row, not insert another.
+- Entry traffic stays on the 5-minute cache. Do not add a per-request `element-summary` fan-out.
+- `kickoff` must keep scheduling work with `asyncio.create_task` on the server loop. Calling `asyncio.create_task` from a sync FastAPI background worker raises and can fail the response.
+- Service-role usage stays inside `delete_me`.
+
+## Tests
+
+Route tests live at the repo root, not under `api/`:
+
+- `tests/test_suggested_xi_route.py`
+- `tests/test_suggested_transfers_route.py`
+
+`tests/test_suggested_xi.py`, `tests/test_suggested_transfers.py`, `tests/test_stats.py` and `tests/test_team_import.py` import `api.services` as well as `fplcore`. There is no separate API test package.
+
+```bash
+uv run pytest -q
+uv run pytest -q tests/test_suggested_xi_route.py tests/test_suggested_transfers_route.py tests/test_suggested_xi.py tests/test_suggested_transfers.py
+```
+
+## When you are working here
+
+Trace one route from `routers/` to the `services` function to the `fplcore` call before editing. If the bug is a wrong transfer, a wrong score, or a stuck queue row, fix it in `fplcore` and leave the handler alone. If the bug is who is allowed to ask, what horizon a guest receives, or what status code comes back, fix it here.

@@ -1,0 +1,112 @@
+---
+description: Orientation for the ingest package — scheduled FPL fetch, metric recompute, and agent queue drain
+globs: ingest/**/*.py,tests/test_ingest_schedule.py
+alwaysApply: false
+---
+
+# ingest
+
+`ingest` is the scheduled job runner. It fetches the public FPL API, upserts raw tables, recomputes `player_metrics`, and — after a lock or pre-deadline refresh — enqueues agent re-runs for recently active signed-in users and drains that queue in the same process. The API can be asleep while this still happens.
+
+Fetch, validate, and upsert logic that talks to Postgres lives in `fplcore.db.repos` and `fplcore.client`. Metric formulas live in `fplcore.metrics`. This package decides which job runs, in what order, and whether today's clock says the job is due.
+
+Read `docs/ARCHITECTURE.md` (sections 3, 6A.6 and 10) before changing the schedule, what a job writes, or which users get a background re-run.
+
+## Where it sits
+
+```
+GitHub Actions cron (.github/workflows/ingest.yml)
+        → python -m ingest.run <job>
+        → FplClient + fplcore.db.repos
+        → compute_player_metrics + replace_metrics
+        → enqueue_run + claim_run + run_claimed
+```
+
+`ingest` depends only on `fplcore`. The console script is `ingest = ingest.run:main`. Local bootstrap:
+
+```bash
+uv run python -m ingest.run bootstrap
+```
+
+The workflow checks out the repo, `uv sync --frozen --all-packages`, and exits immediately when the `DATABASE_URL` secret is empty. Other env: `FPL_API_BASE_URL`, `FPL_MAX_REQUESTS_PER_SECOND=3`, `AGENT_TRACKING_WINDOW_DAYS=30`, `INTERNAL_API_SECRET`, `SENTRY_DSN`. Cron is UTC.
+
+| UTC cron | Command |
+|---|---|
+| `20 0 * * *` (daily 00:20) | `python -m ingest.run prices` |
+| `15 9 * * *` (daily 09:15) | `python -m ingest.run lock --if-due` |
+| `0 8 * * 5` and `0 18 * * 5` (Friday 08:00 and 18:00) | `python -m ingest.run pre_deadline --if-due` |
+
+`workflow_dispatch` can run `all`, `bootstrap`, `fixtures`, `element_summaries`, `metrics`, `agent_rerun`, `drain`, `prices`, `lock`, `pre_deadline`.
+
+## Directory map
+
+| File | Responsibility |
+|---|---|
+| `ingest/src/ingest/run.py` | Every job, the CLI, queue drain, retention prune. |
+| `ingest/src/ingest/schedule.py` | `is_lock_morning` and `deadline_is_soon`. Pure clock checks, no I/O. |
+| `ingest/src/ingest/__init__.py` | Package docstring only. |
+
+There is no HTTP server here. A manual drain is `python -m ingest.run drain` (also a `workflow_dispatch` choice in `.github/workflows/ingest.yml`). The API does not import this package.
+
+## Jobs
+
+Each fetch job opens `fplcore.db.connect`, writes an `ingest_runs` row through `log_ingest_start` / `log_ingest_finish`, and commits the failure row before re-raising.
+
+| CLI name | What it runs |
+|---|---|
+| `bootstrap` | `FplClient.bootstrap_static` → `upsert_bootstrap`. `maybe_daily_snapshots` inserts `player_daily_snapshots` once per UTC date (the first bootstrap of that date). |
+| `fixtures` | Full fixture list → `upsert_fixtures`. |
+| `element_summaries` | Refreshes bootstrap, then `element-summary` only for players whose minutes changed (`players_needing_history`). Each player is upserted and marked synced in its own commit. The client throttle is about 3 requests/second. |
+| `metrics` | Reads `players`, `player_gameweek_stats`, `fixtures`, `player_daily_snapshots`. Calls `compute_player_metrics` for the next gameweek and the five after it. `replace_metrics` upserts rows and bumps `data_versions`. Raises if bootstrap has not loaded players yet. |
+| `prices` | `bootstrap` + `fixtures` + `metrics`, then `prune_retention`. No element summaries and no agent enqueue. This is the daily price pass after 00:00 UK. |
+| `lock` | With `--if-due`, runs the full pull only on the UK morning after a gameweek's last kickoff (`schedule.is_lock_morning`: FPL confirms points at 09:00 UK the next day). On any other morning, if the next deadline is inside 48 hours, it runs `pre_deadline` instead. Otherwise it logs and returns. The full pull is bootstrap, fixtures, element summaries, metrics, then `job_agent_rerun("data_refresh")`. |
+| `pre_deadline` | With `--if-due`, returns when the next deadline is more than 48 hours away (`deadline_is_soon`). Otherwise bootstrap, metrics, and `job_agent_rerun("pre_deadline")`. |
+| `agent_rerun` | Enqueue then drain. Optional `--trigger` (default `data_refresh`). |
+| `drain` | `drain_queue` only (default limit 50). |
+| `all` | bootstrap, fixtures, element summaries, metrics, prune. No agent enqueue. |
+
+`job_agent_rerun` selects `profiles` joined to `tracked_entries` where `fpl_entry_id` is set and `last_active_at` is inside `AGENT_TRACKING_WINDOW_DAYS` (default 30). It uses each profile's saved weights, the latest `team_snapshots` row for that user and entry, and the latest `data_versions.id`. Priority is 10 (the user-triggered API path uses the default 0, so user work is claimed first). It then `drain_queue` and prunes.
+
+`drain_queue` claims with worker id `gha-<GITHUB_RUN_ID>` (or `gha-local`) and calls `fplcore.agent.runner.run_claimed` until the queue is empty or the limit is hit. That is the same claim function the API poll loop uses.
+
+`_prune` calls `fplcore.db.repos.prune_retention`. The API worker also prunes hourly. Windows (match stats, metric horizon, snapshots, entry cache, old agent runs) are constants in `fplcore.constants`, not in this package.
+
+## Clock rules (`schedule.py`)
+
+- `is_lock_morning(final_kickoffs, now)` is true when any gameweek's last kickoff has a UK calendar date of yesterday. Pass the per-event `max(kickoff_time)` rows. The 09:15 UTC cron is the slot; this function decides whether that slot should do the history pull.
+- `deadline_is_soon(deadline, now)` is true when the deadline is still ahead and within 48 hours (`PRE_DEADLINE_WINDOW`).
+- Naive datetimes are treated as UTC. Comparisons use `Europe/London` for the lock morning and absolute timedeltas for the deadline window.
+
+`run.py` loads kickoffs and the next deadline inside `_lock_is_due` and `_deadline_is_due`. A missing current season returns false so an empty database does not call FPL.
+
+## Boundaries
+
+Edit job order, due checks, and who gets enqueued in this package.
+
+Edit SQL upserts, history-sync bookkeeping, and metric storage in `fplcore/db/repos.py`. Edit formulas in `fplcore/metrics/`. Edit claim, retry, and plan writing in `fplcore/agent/`. Edit the cron expressions and secrets in `.github/workflows/ingest.yml` when the clock itself should move; keep the due check in `schedule.py` so a manual dispatch can still run the job without `--if-due`.
+
+Do not add FastAPI routes here. Do not recompute weights per user during ingest. `player_metrics` stores components. The API applies weights later.
+
+## Invariants
+
+- One bulk bootstrap and one fixtures call per job. `element-summary` is limited to players whose minutes changed, and only the lock (and `all` / `element_summaries`) jobs request it.
+- `prices` and Friday `pre_deadline` do not pull element summaries. History is refreshed on the lock morning.
+- Background re-runs skip users outside the activity window. They resume when `last_active_at` moves, which the API does on authenticated requests.
+- `enqueue_run` will not insert a second queued or running row for the same user and entry. Counting `queued += 1` in `job_agent_rerun` counts attempts, including rows that were already queued.
+- Drain must keep calling `claim_run` / `run_claimed` so a crashed API worker does not strand re-runs. Do not invent a second queue.
+- Failed jobs still write `ingest_runs.ok = false` and then raise, so the Action goes red.
+- `metrics` requires a current season and players. Run `bootstrap` first.
+- The schema allows trigger `post_deadline`. No job in `run.py` enqueues it. The implemented background triggers are `data_refresh` (lock) and `pre_deadline`.
+
+## Tests
+
+`tests/test_ingest_schedule.py` covers `is_lock_morning` and `deadline_is_soon` with fixed datetimes. Job functions in `run.py` are not unit-tested here; they need Postgres and the FPL client. Related fplcore tests: `tests/test_history_sync.py` (`players_needing_history`), `tests/test_retention.py`, `tests/test_metrics.py`.
+
+```bash
+uv run pytest -q tests/test_ingest_schedule.py
+uv run pytest -q tests/test_ingest_schedule.py tests/test_history_sync.py tests/test_retention.py tests/test_metrics.py
+```
+
+## When you are working here
+
+Decide whether the change is a clock (`schedule.py` and the workflow cron), a step in the pipeline (`run.py` job order), or a write (`fplcore`). A wrong score after a successful ingest is a metrics bug. A job that ran on the wrong morning is a schedule bug. A signed-in user who never got a new plan is either outside `AGENT_TRACKING_WINDOW_DAYS`, missing a snapshot, or stuck in `agent_runs` — check the enqueue filter and the drain before adding a new trigger.

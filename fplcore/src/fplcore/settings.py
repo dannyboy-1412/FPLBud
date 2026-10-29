@@ -29,7 +29,6 @@ class Settings(BaseSettings):
     app_env: str = "development"
     next_public_site_url: str = "http://localhost:3000"
     next_public_api_url: str = "http://localhost:8000"
-    cors_allowed_origins: str = "http://localhost:3000"
 
     next_public_supabase_url: str = ""
     next_public_supabase_anon_key: str = ""
@@ -76,10 +75,6 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
-
-    @property
-    def cors_origins(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     @property
     def supabase_url(self) -> str:

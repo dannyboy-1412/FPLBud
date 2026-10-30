@@ -28,6 +28,34 @@ export function isTeamNotFound(err: unknown): boolean {
   );
 }
 
+const TRANSIENT_STATUS = new Set([502, 503, 504]);
+
+function isFetchFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === "AbortError" || err.name === "TimeoutError") return false;
+  if (err.message === "fetch failed" || err.message === "Failed to fetch") return true;
+  const cause = err.cause;
+  if (cause instanceof Error && isFetchFailure(cause)) return true;
+  if (typeof cause === "object" && cause !== null && "code" in cause) {
+    const code = String((cause as { code: unknown }).code);
+    return code === "ECONNREFUSED" || code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ENOTFOUND" || code === "EAI_AGAIN";
+  }
+  if (typeof cause === "object" && cause !== null && "errors" in cause && Array.isArray((cause as { errors: unknown }).errors)) {
+    return (cause as { errors: unknown[] }).errors.some(isFetchFailure);
+  }
+  return false;
+}
+
+/** True when the API host is asleep, restarting, or unreachable. */
+export function isTransientApiError(err: unknown): boolean {
+  if (err instanceof ApiError && TRANSIENT_STATUS.has(err.status)) return true;
+  return isFetchFailure(err);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function api<T>(
   path: string,
   init: RequestInit & { token?: string | null } = {},
@@ -40,7 +68,23 @@ export async function api<T>(
   if (init.token) {
     headers.set("Authorization", `Bearer ${init.token}`);
   }
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const method = (init.method ?? "GET").toUpperCase();
+  const retryable = method === "GET" || method === "HEAD";
+  const attempts = retryable ? 3 : 1;
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      response = await fetch(`${API_URL}${path}`, { ...init, headers });
+    } catch (err) {
+      if (!retryable || attempt === attempts - 1 || !isFetchFailure(err)) throw err;
+      await wait(400 * (attempt + 1));
+      continue;
+    }
+    if (!retryable || !TRANSIENT_STATUS.has(response.status) || attempt === attempts - 1) break;
+    await response.body?.cancel();
+    await wait(400 * (attempt + 1));
+  }
+  if (!response) throw new TypeError("fetch failed");
   if (!response.ok) {
     let detail = response.statusText;
     try {

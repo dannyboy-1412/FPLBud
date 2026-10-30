@@ -1,3 +1,4 @@
+import { loadAccount, renderApi } from "@/lib/server/render-api";
 import { getMySquadStats, getOwnedIds } from "@/lib/server/data";
 import { PlayerCell, StatTable } from "./StatTable";
 
@@ -7,6 +8,12 @@ function fixtureLabel(fixtures: { opponent: string; fdr: number; is_home: boolea
 }
 
 export async function SquadSection() {
+  const account = await loadAccount();
+  if (!account.ok) return null;
+  return renderApi(() => loadSquad());
+}
+
+async function loadSquad() {
   const ownedIdsPromise = getOwnedIds();
   const data = await getMySquadStats();
   const ownedIds = await ownedIdsPromise;

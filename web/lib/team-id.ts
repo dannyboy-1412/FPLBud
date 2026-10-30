@@ -28,6 +28,6 @@ export function teamIdErrorMessage(error: TeamLookupError): string {
     case "not_found":
       return "No team with that ID. Check the number in your Points page URL.";
     case "unreachable":
-      return "We can't reach the press room right now.";
+      return "The press room is still waking up. Try again in a minute.";
   }
 }

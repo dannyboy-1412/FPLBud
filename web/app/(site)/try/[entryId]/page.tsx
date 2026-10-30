@@ -4,7 +4,8 @@ import { LandingLookup } from "@/components/programme/LandingLookup";
 import { TeamViewSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
 import { TeamView } from "@/components/programme/TeamReport";
-import { isTeamNotFound, type PublicTeam } from "@/lib/api";
+import { isTeamNotFound } from "@/lib/api";
+import { renderApi } from "@/lib/server/render-api";
 import { getMe, getPositionLeaders, getPublicTeam } from "@/lib/server/data";
 import { getAccessToken } from "@/lib/server/session";
 import { parseTeamId } from "@/lib/team-id";
@@ -27,20 +28,21 @@ async function TryContent({ params }: { params: PageProps<"/try/[entryId]">["par
 }
 
 async function TryTeam({ entryId }: { entryId: number }) {
-  const token = await getAccessToken();
-  if (token) {
-    const me = await getMe();
-    if (me.profile.fpl_entry_id === entryId) redirect("/dashboard");
-  }
-  const leadersPromise = getPositionLeaders();
-  let team: PublicTeam;
-  try {
-    team = await getPublicTeam(entryId);
-  } catch (err) {
-    if (isTeamNotFound(err)) return <UnknownTeam />;
-    throw err;
-  }
-  return <TeamView team={team} leaders={await leadersPromise} lineup="locked" />;
+  return renderApi(async () => {
+    const token = await getAccessToken();
+    if (token) {
+      const me = await getMe();
+      if (me.profile.fpl_entry_id === entryId) redirect("/dashboard");
+    }
+    const leadersPromise = getPositionLeaders();
+    try {
+      const team = await getPublicTeam(entryId);
+      return <TeamView team={team} leaders={await leadersPromise} lineup="locked" />;
+    } catch (err) {
+      if (isTeamNotFound(err)) return <UnknownTeam />;
+      throw err;
+    }
+  });
 }
 
 function UnknownTeam() {

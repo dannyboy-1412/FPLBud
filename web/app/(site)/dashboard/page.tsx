@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { TeamView } from "@/components/programme/TeamReport";
 import { TeamViewSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
+import { loadAccount, renderApi } from "@/lib/server/render-api";
 import { getMyTeam, getPositionLeaders } from "@/lib/server/data";
 
 // 30 minutes. Returning to Team reuses this render instead of fetching it again.
@@ -18,7 +19,11 @@ export default function DashboardPage() {
 }
 
 async function SavedTeam() {
-  const [team, leaders] = await Promise.all([getMyTeam(), getPositionLeaders()]);
-  if (!team) return null;
-  return <TeamView team={team} leaders={leaders} showHeader={false} lineup="ready" />;
+  const account = await loadAccount();
+  if (!account.ok) return null;
+  return renderApi(async () => {
+    const [team, leaders] = await Promise.all([getMyTeam(), getPositionLeaders()]);
+    if (!team) return null;
+    return <TeamView team={team} leaders={leaders} showHeader={false} lineup="ready" />;
+  });
 }

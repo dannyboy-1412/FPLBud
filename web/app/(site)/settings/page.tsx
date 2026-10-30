@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { SettingsForm } from "@/components/programme/SettingsForm";
 import { SettingsSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
+import { renderApi } from "@/lib/server/render-api";
 import { getMe, loadMeta } from "@/lib/server/data";
 
 export default function SettingsPage() {
@@ -18,6 +19,8 @@ export default function SettingsPage() {
 }
 
 async function SettingsLoader() {
-  const [me, meta] = await Promise.all([getMe(), loadMeta()]);
-  return <SettingsForm profile={me.profile} meta={meta} />;
+  return renderApi(async () => {
+    const [me, meta] = await Promise.all([getMe(), loadMeta()]);
+    return <SettingsForm profile={me.profile} meta={meta} />;
+  });
 }

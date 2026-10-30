@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const SECTION_IDS = new Set(["squad", "season", "market", "insights"]);
+const SECTION_IDS = new Set(["squad", "insights"]);
 
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl;

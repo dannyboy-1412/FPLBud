@@ -8,8 +8,6 @@ export const DASHBOARD_SECTIONS = [
   { id: "team", label: "Team", href: "/dashboard", available: true },
   { id: "squad", label: "My squad", href: "/dashboard/squad", available: true },
   { id: "plans", label: "Plans", href: "/dashboard/plans", available: false },
-  { id: "season", label: "My season", href: "/dashboard/season", available: false },
-  { id: "market", label: "Market", href: "/dashboard/market", available: false },
   { id: "insights", label: "Insights", href: "/dashboard/insights", available: false },
 ] as const;
 

@@ -16,10 +16,8 @@ from api.worker import poll_loop
 from fplcore.db import close_pool, create_pool
 from fplcore.settings import get_settings
 
-# Browsers that may call this API with credentials. Add the deployed site here.
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-]
+# Preview deploys use a different host than the production alias.
+VERCEL_PREVIEW_ORIGIN = r"https://fplbud(?:-[a-z0-9-]+)?\.vercel\.app"
 
 
 @asynccontextmanager
@@ -41,12 +39,14 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
     app = FastAPI(title="FPLBud API", version="0.1.0", lifespan=lifespan)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=CORS_ALLOWED_ORIGINS,
+        allow_origins=settings.cors_origins,
+        allow_origin_regex=VERCEL_PREVIEW_ORIGIN,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

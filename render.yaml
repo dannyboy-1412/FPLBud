@@ -15,6 +15,8 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: http://localhost:3000,https://fplbud.vercel.app
       - key: INTERNAL_API_SECRET
         generateValue: true
       - key: LLM_ENABLED

@@ -30,3 +30,4 @@ web/src/lib/api-types.ts
 Thumbs.db
 .vscode/
 .idea/
+.vercel

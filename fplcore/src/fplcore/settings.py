@@ -18,6 +18,10 @@ def _repo_root() -> Path:
 _ROOT = _repo_root()
 
 
+def split_origins(value: str) -> list[str]:
+    return [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(_ROOT / ".env"),
@@ -67,6 +71,8 @@ class Settings(BaseSettings):
     user_rate_limit_per_minute: int = 30
     agent_rerun_limit_per_hour: int = 6
 
+    cors_allowed_origins: str = "http://localhost:3000,https://fplbud.vercel.app"
+
     @field_validator("fpl_api_base_url")
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
@@ -79,6 +85,10 @@ class Settings(BaseSettings):
     @property
     def supabase_url(self) -> str:
         return self.next_public_supabase_url.rstrip("/").removesuffix("/rest/v1")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return split_origins(self.cors_allowed_origins)
 
 
 @lru_cache(maxsize=1)

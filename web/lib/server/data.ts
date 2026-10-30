@@ -7,6 +7,7 @@ import {
   api,
   ApiError,
   TeamNotFoundError,
+  type InsightsStats,
   type MeResponse,
   type Meta,
   type PlayerRow,
@@ -118,5 +119,14 @@ export const getMySquadStats = cache(async (): Promise<SquadStats> => {
   const token = await getAccessToken();
   if (!token) throw new ApiError(401, "sign in required");
   return api<SquadStats>("/me/stats/squad", { token });
+});
+
+export const getInsights = cache(async (position?: number): Promise<InsightsStats> => {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError(401, "sign in required");
+  const q = new URLSearchParams();
+  if (position) q.set("position", String(position));
+  const query = q.toString();
+  return api<InsightsStats>(query ? `/stats/insights?${query}` : "/stats/insights", { token });
 });
 

@@ -7,8 +7,8 @@ import { IntentPrefetchLink } from "@/components/dashboard/IntentPrefetchLink";
 export const DASHBOARD_SECTIONS = [
   { id: "team", label: "Team", href: "/dashboard", available: true },
   { id: "squad", label: "My squad", href: "/dashboard/squad", available: true },
+  { id: "insights", label: "Insights", href: "/dashboard/insights", available: true },
   { id: "plans", label: "Plans", href: "/dashboard/plans", available: false },
-  { id: "insights", label: "Insights", href: "/dashboard/insights", available: false },
 ] as const;
 
 const tabClass = "pb-3 pt-2 font-[family-name:var(--font-fraunces)] text-2xl font-semibold";

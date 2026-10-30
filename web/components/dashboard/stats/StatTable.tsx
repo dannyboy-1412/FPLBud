@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import type { StatPlayer } from "@/lib/api";
 import { POS } from "./format";
 
-export function PlayerCell({ player, ownedIds = [] }: { player: StatPlayer; ownedIds?: number[] }) {
+export function PlayerCell({
+  player,
+  ownedIds = [],
+}: {
+  player: Pick<StatPlayer, "id" | "web_name" | "team_short" | "position_id">;
+  ownedIds?: number[];
+}) {
   const owned = ownedIds.includes(player.id);
   return (
     <>

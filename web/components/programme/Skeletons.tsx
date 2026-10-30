@@ -72,6 +72,16 @@ export function TeamViewSkeleton() {
   );
 }
 
+export function TeamPitchSkeleton() {
+  return (
+    <div aria-hidden>
+      <div className="skeleton h-3 w-32 mb-2" />
+      <div className="skeleton h-16 w-40 mb-8" />
+      <PitchSkeleton />
+    </div>
+  );
+}
+
 export function TableSkeleton() {
   return (
     <div className="space-y-2" aria-hidden>

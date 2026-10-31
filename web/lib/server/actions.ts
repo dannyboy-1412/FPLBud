@@ -145,6 +145,68 @@ export async function fetchSuggestedTransfers(): Promise<{ advice: SuggestedTran
   }
 }
 
+export async function sendChatFeedback(
+  messageId: number,
+  value: 1 | -1,
+): Promise<{ error?: string }> {
+  const token = await getAccessToken();
+  if (!token) return { error: "Sign in required." };
+  try {
+    await api(`/chat/messages/${messageId}/feedback`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({ value }),
+    });
+    return {};
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Could not save feedback." };
+  }
+}
+
+export async function confirmChatMemory(
+  proposalId: number,
+  accept: boolean,
+): Promise<{ error?: string }> {
+  const token = await getAccessToken();
+  if (!token) return { error: "Sign in required." };
+  try {
+    await api("/chat/memory/confirm", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ proposal_id: proposalId, accept }),
+    });
+    refresh();
+    return {};
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Could not update that preference." };
+  }
+}
+
+export async function deleteChatMemory(formData: FormData): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+  const key = String(formData.get("key") ?? "");
+  if (!key) return;
+  await api(`/chat/memory?key=${encodeURIComponent(key)}`, { method: "DELETE", token });
+  refresh();
+}
+
+export async function deleteChatHistory(): Promise<{ error?: string }> {
+  const token = await getAccessToken();
+  if (!token) return { error: "Sign in required." };
+  try {
+    await api("/chat/threads", { method: "DELETE", token });
+    await api("/chat/memory", { method: "DELETE", token });
+    refresh();
+    return {};
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Could not delete chat history." };
+  }
+}
+
 export async function deleteAccount(): Promise<{ error?: string }> {
   const token = await getAccessToken();
   if (!token) return { error: "Sign in required." };

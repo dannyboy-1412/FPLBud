@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardSections } from "@/components/dashboard/DashboardSections";
 import { HeadingSkeleton } from "@/components/programme/Skeletons";
@@ -29,6 +30,11 @@ async function DashboardFrame({ children }: { children: ReactNode }) {
       <div className="mb-6">
         <p className="kicker">{meta?.next_event ? `Gameweek ${meta.next_event.id}` : "Dashboard"}</p>
         <h1 className="mt-1">{me.profile.fpl_team_name ?? "Your team"}</h1>
+        <p className="mt-2">
+          <Link href="/chat" className="kicker">
+            Ask the assistant
+          </Link>
+        </p>
       </div>
       <DashboardSections />
       {children}

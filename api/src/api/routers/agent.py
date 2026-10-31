@@ -9,6 +9,7 @@ from api.limiter import limiter
 from api.worker import kickoff
 from fplcore.agent.queue import enqueue_run
 from fplcore.constants import DEFAULT_WEIGHTS
+from fplcore.db.repos import latest_succeeded_run
 from fplcore.settings import Settings
 
 router = APIRouter()
@@ -85,14 +86,7 @@ def rerun(
 
 @router.get("/me/agent/latest")
 def latest(user: dict = Depends(current_user), conn: Connection = Depends(db_conn)) -> dict:
-    run = conn.execute(
-        """
-        select * from agent_runs
-         where user_id = %s and status = 'succeeded'
-         order by finished_at desc nulls last limit 1
-        """,
-        [user["id"]],
-    ).fetchone()
+    run = latest_succeeded_run(conn, str(user["id"]))
     if run is None:
         raise HTTPException(status_code=404, detail="no edition yet")
     return _pack_run(conn, run)

@@ -2,6 +2,9 @@ from types import SimpleNamespace
 
 from fplcore.constants import (
     AGENT_RUN_KEEP_HOURS,
+    CHAT_PROPOSAL_RETENTION_DAYS,
+    CHAT_THREAD_RETENTION_DAYS,
+    CHAT_USAGE_RETENTION_DAYS,
     ENTRY_CACHE_PRUNE_SECONDS,
     LOG_RETENTION_DAYS,
     MATCH_STATS_RETENTION_ROUNDS,
@@ -73,6 +76,12 @@ def test_prune_drops_rows_outside_windows() -> None:
     assert deletes["data_versions"] == [LOG_RETENTION_DAYS]
     assert deletes["ingest_runs"] == [LOG_RETENTION_DAYS]
     assert "team_snapshots" in deletes
+    assert deletes["chat_threads"] == [CHAT_THREAD_RETENTION_DAYS]
+    assert deletes["chat_usage"] == [CHAT_USAGE_RETENTION_DAYS]
+    assert deletes["chat_usage_global"] == [CHAT_USAGE_RETENTION_DAYS]
+    assert deletes["chat_memory_proposals"] == [CHAT_PROPOSAL_RETENTION_DAYS]
+    tool_sql = next(sql for sql, _ in conn.statements if "chat_tool_calls" in sql)
+    assert "set result = null" in " ".join(tool_sql.split()).lower()
     assert counts["player_gameweek_stats"] == 1
     agent_sql = next(sql for sql, _ in conn.statements if "delete from agent_runs" in " ".join(sql.split()).lower())
     assert "queued" in agent_sql

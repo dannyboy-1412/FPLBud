@@ -1,0 +1,15 @@
+event: turn.start
+data: {"turn_id":1,"thread_id":"thread","user_message_id":2,"prompt_version":"2026-10-31a","model":"scripted","protocol_version":"1"}
+
+event: message.delta
+data: {"text":"The deadline is Saturday.","round":1,"attempt":1}
+
+event: message.final
+data: {"message_id":3,"text":"The deadline is Saturday. [[p:13|Haaland]] is your captain.","citations":[{"player_id":13,"name":"Haaland","team":"MCI","price_m":15.0}],"data_as_of":"2026-10-25T12:00:00Z","tools_used":[{"name":"get_gameweek_context","args_brief":"{}"}],"grounding":"ok","disclaimers":[]}
+
+event: usage
+data: {"turns_left_today":19,"tokens":{"input":12,"output":8,"cached":0}}
+
+event: done
+data: {"turn_id":1,"status":"ok"}
+

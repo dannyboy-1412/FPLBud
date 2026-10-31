@@ -1,0 +1,382 @@
+{
+  "protocol_version": "1",
+  "events": {
+    "turn.start": {
+      "additionalProperties": false,
+      "properties": {
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "integer"
+        },
+        "thread_id": {
+          "title": "Thread Id",
+          "type": "string"
+        },
+        "user_message_id": {
+          "title": "User Message Id",
+          "type": "integer"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": "1",
+          "title": "Protocol Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "thread_id",
+        "user_message_id",
+        "prompt_version",
+        "model"
+      ],
+      "title": "TurnStart",
+      "type": "object"
+    },
+    "status": {
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "enum": [
+            "thinking",
+            "tool",
+            "checking"
+          ],
+          "title": "Phase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase"
+      ],
+      "title": "StatusEvent",
+      "type": "object"
+    },
+    "tool.start": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "name",
+        "label"
+      ],
+      "title": "ToolStart",
+      "type": "object"
+    },
+    "tool.end": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "ms": {
+          "title": "Ms",
+          "type": "integer"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        }
+      },
+      "required": [
+        "call_id",
+        "ok",
+        "ms"
+      ],
+      "title": "ToolEnd",
+      "type": "object"
+    },
+    "message.delta": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "round": {
+          "title": "Round",
+          "type": "integer"
+        },
+        "attempt": {
+          "default": 1,
+          "title": "Attempt",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "text",
+        "round"
+      ],
+      "title": "MessageDelta",
+      "type": "object"
+    },
+    "message.final": {
+      "$defs": {
+        "Citation": {
+          "additionalProperties": false,
+          "properties": {
+            "player_id": {
+              "title": "Player Id",
+              "type": "integer"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "team": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Team"
+            },
+            "price_m": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Price M"
+            }
+          },
+          "required": [
+            "player_id",
+            "name"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "ToolUse": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "args_brief": {
+              "title": "Args Brief",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "args_brief"
+          ],
+          "title": "ToolUse",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "data_as_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data As Of"
+        },
+        "tools_used": {
+          "items": {
+            "$ref": "#/$defs/ToolUse"
+          },
+          "title": "Tools Used",
+          "type": "array"
+        },
+        "grounding": {
+          "enum": [
+            "ok",
+            "repaired",
+            "fallback"
+          ],
+          "title": "Grounding",
+          "type": "string"
+        },
+        "disclaimers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Disclaimers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "message_id",
+        "text",
+        "citations",
+        "tools_used",
+        "grounding"
+      ],
+      "title": "MessageFinal",
+      "type": "object"
+    },
+    "memory.proposal": {
+      "additionalProperties": false,
+      "properties": {
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "integer"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "key",
+        "value",
+        "label"
+      ],
+      "title": "MemoryProposalEvent",
+      "type": "object"
+    },
+    "usage": {
+      "additionalProperties": false,
+      "properties": {
+        "turns_left_today": {
+          "title": "Turns Left Today",
+          "type": "integer"
+        },
+        "tokens": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Tokens",
+          "type": "object"
+        }
+      },
+      "required": [
+        "turns_left_today",
+        "tokens"
+      ],
+      "title": "UsageEvent",
+      "type": "object"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "turns_left_today": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turns Left Today"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "done": {
+      "additionalProperties": false,
+      "properties": {
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "status"
+      ],
+      "title": "DoneEvent",
+      "type": "object"
+    }
+  }
+}

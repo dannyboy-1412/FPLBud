@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -149,6 +150,39 @@ class TeamSnapshot:
             "content_hash": self.content_hash,
             "squad_players": self.squad_players,
         }
+
+
+def snapshot_from_row(
+    row: Mapping[str, Any],
+    *,
+    name: str = "",
+    manager: str = "",
+    squad_players: list[dict[str, Any]] | None = None,
+) -> TeamSnapshot:
+    """Build a TeamSnapshot from a stored team_snapshots row. Does not call FPL."""
+    selling = row.get("selling_prices") or {}
+    if isinstance(selling, str):
+        selling = json.loads(selling)
+    return TeamSnapshot(
+        entry_id=int(row["entry_id"]),
+        event=int(row["event"]),
+        season_id=str(row["season_id"]),
+        name=name,
+        manager=manager,
+        overall_rank=None,
+        picks=list(row.get("picks") or []),
+        bank=int(row["bank"]),
+        team_value=int(row["team_value"]),
+        free_transfers=int(row["free_transfers"]),
+        selling_prices={str(key): int(value) for key, value in dict(selling).items()},
+        chips_available=list(row.get("chips_available") or []),
+        chips_used=list(row.get("chips_used") or []),
+        active_chip=row.get("active_chip"),
+        flags=list(row.get("flags") or []),
+        overrides=row.get("overrides"),
+        content_hash=str(row.get("content_hash") or ""),
+        squad_players=list(squad_players or []),
+    )
 
 
 def apply_overrides(snapshot: TeamSnapshot, overrides: dict[str, Any] | None) -> TeamSnapshot:

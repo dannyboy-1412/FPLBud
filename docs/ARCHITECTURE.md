@@ -284,6 +284,28 @@ Auth: **Public** = anyone, rate-limited by IP. **Optional** = guest behaviour un
 `HorizonPlan = {horizon, transfers:[{out,in,cost_delta,metric_deltas}], hits, gain_vs_roll, roll_alternative, xi[11], bench[4] (ordered), captain, vice, chips:[ChipTip], flags, reason_codes, projected_points_by_gw, explanation, explanation_source}`. The guest `POST /suggestions` returns the same shape for N=1 (without chip advice).
 Validate with pydantic, rate-limit with slowapi (per IP for guests, per `sub` for users), and set CORS from `CORS_ALLOWED_ORIGINS`.
 
+## 7A. Chat assistant
+
+Signed-in only. `CHAT_ENABLED` defaults to false. When `CHAT_ALLOWED_USER_IDS` is set, only those user ids can open a thread.
+
+The loop lives in `fplcore/chat` and does not import FastAPI. `api/chat` builds the pinned context, the tools, and the SSE stream. The web app does not call Render directly: `POST /api/chat/stream` reads the Supabase session and pipes `POST /chat/threads/{id}/messages`.
+
+Tools are read-only except `save_preference`, which only proposes a row until `POST /chat/memory/confirm`. Projections, legality and hit maths come from the existing optimiser, `fplcore/rules.py` and the metrics. The model explains. Answers are checked against the tool results before `message.final`.
+
+The stream route uses `chat_user`, which closes its database connection before the first byte. It does not use `deps.db_conn`, because that dependency holds a pooled connection until the response finishes.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /chat/health` | Whether chat is on for this user |
+| `POST /chat/threads`, `GET /chat/threads`, `DELETE /chat/threads` | Create, list, delete every thread |
+| `GET /chat/threads/{id}`, `DELETE /chat/threads/{id}` | One thread. Another user's id is 404 |
+| `POST /chat/threads/{id}/messages` | SSE turn. `409` if one is already running. Idempotent on `client_msg_id` |
+| `POST /chat/messages/{id}/feedback` | Useful / not useful |
+| `GET /chat/usage` | Turns left today |
+| `GET /chat/memory`, `POST /chat/memory/confirm`, `DELETE /chat/memory` | Saved preferences |
+
+Tables, added in `db/migrations/010_chat.sql`: `chat_threads`, `chat_messages`, `chat_turns`, `chat_tool_calls`, `chat_memory`, `chat_memory_proposals`, `chat_usage`, `chat_usage_global`. Daily caps are keyed by the JWT `sub`. `prune_retention` drops threads after 90 days, clears tool results after 14, and drops usage after 35. Replay is `python -m api.chat.replay <turn_id>`, refused in production when `CHAT_ADMIN_USER_IDS` is empty.
+
 ## 8. Frontend pages (Next.js App Router, Tailwind, shadcn/ui, `@supabase/ssr`)
 
 - `/` (landing): FPLBud pitch, a team ID input for guests (with help on finding it: the number in the URL of the FPL "Points" page), and a **Sign in with Google** button.
@@ -291,7 +313,8 @@ Validate with pydantic, rate-limit with slowapi (per IP for guests, per `sub` fo
 - `/login` and `/auth/callback`: Google OAuth through Supabase. New users are sent to onboarding.
 - `/onboarding` (user): enter the FPL team ID once. It's validated with a preview of the manager and team name, then saved with `PUT /me/team`, and the agent starts.
 - `/dashboard` (user): pitch view and context panel (bank, FT, chips, flagged players), then **section tabs: Plans / My squad / My season / Market / Insights** (`?section=`). **Plans** keeps the agent panel with progress steps while polling, then **three horizon tabs: Next GW / Next 3 / Next 5**. Each plan tab shows transfer cards (or "Roll"), hit maths, XI and bench, captain and vice, chip tips and the explanation. There's a "Plans updated" banner when a background re-run finishes, and a "Re-run agent" button. **Market** is top transfers in/out, 24h movers, price risers/fallers and estimated price pressure (labelled as an estimate: FPL does not publish the algorithm). **My squad** is the captaincy board, template threats and differentials. **My season** is GW points vs average, rank, bench, hits and captain returns. **Insights** is form, finishing variance, DC hit rate, bonus and set pieces. Player lists mark "you own" from the squad on the page, so the public market/insights payloads stay cacheable.
-- `/settings` (user): metric weights and optional-metric toggles (saved to the profile), default horizon and max hits, changing the FPL team ID, sign out, and delete account.
+- `/settings` (user): metric weights and optional-metric toggles (saved to the profile), default horizon and max hits, changing the FPL team ID, chat preferences, delete chat history, sign out, and delete account.
+- `/chat` (user): the assistant. Citation chips do not link to a player page.
 - `/players`: explorer (profile weights when signed in).
 - `/how-it-works`: metric formulas, horizon and hit rules, and chip thresholds in plain English.
 
@@ -338,5 +361,11 @@ Next.js middleware redirects `/onboarding`, `/dashboard` and `/settings` to `/lo
 | **New:** `GUEST_RATE_LIMIT_PER_MINUTE` | api | per-IP limit for public endpoints (suggested 10) |
 | **New:** `USER_RATE_LIMIT_PER_MINUTE` | api | per-user limit for `/me*` and `/suggestions` (suggested 30) |
 | **New:** `AGENT_RERUN_LIMIT_PER_HOUR` | api | manual re-runs and weight-change re-runs per user (suggested 6) |
+| `CHAT_ENABLED` | api | Master switch. Default false |
+| `CHAT_ALLOWED_USER_IDS` | api | Comma-separated user ids. Empty means every signed-in user, once chat is on |
+| `CHAT_ADMIN_USER_IDS` | api | Required in production before `python -m api.chat.replay` will print a turn |
+| `CHAT_LLM_API_KEY`, `CHAT_LLM_BASE_URL`, `CHAT_MODEL`, `CHAT_FALLBACK_MODEL` | api | OpenAI-compatible tool-calling model. Separate from `LLM_DAILY_CALL_CAP` |
+| `CHAT_USER_TURNS_PER_DAY`, `CHAT_USER_TURNS_PER_DAY_NOTEAM` | api | Daily question caps (20 with a saved team, 10 without) |
+| `CHAT_GLOBAL_DAILY_USD`, `CHAT_USER_OPTIMISER_PER_HOUR` | api | Spend cap and optimiser cap |
 
 The GitHub Actions ingest workflow needs `DATABASE_URL`, `FPL_*`, `AGENT_*` and `SENTRY_DSN` as repository secrets.

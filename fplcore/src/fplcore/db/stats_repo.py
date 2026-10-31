@@ -207,6 +207,31 @@ def next_event_fixtures(conn: Connection) -> dict[int, list[dict[str, Any]]]:
     return by_team
 
 
+def fixtures_for(
+    conn: Connection,
+    season: str,
+    gws: list[int],
+    team: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fixtures in the given gameweeks, plus unscheduled ones (event is null)."""
+    sql = """
+        select f.id, f.event, f.kickoff_time, f.team_h, f.team_a,
+               f.team_h_difficulty, f.team_a_difficulty, f.finished,
+               th.short_name as home_short, ta.short_name as away_short
+          from fixtures f
+          join teams th on th.season_id = f.season_id and th.id = f.team_h
+          join teams ta on ta.season_id = f.season_id and ta.id = f.team_a
+         where f.season_id = %s
+           and (f.event = any(%s) or f.event is null)
+    """
+    params: list[Any] = [season, gws]
+    if team is not None:
+        sql += " and (f.team_h = %s or f.team_a = %s)"
+        params.extend([team, team])
+    sql += " order by f.event nulls last, f.kickoff_time nulls last, f.id"
+    return [dict(row) for row in conn.execute(sql, params)]
+
+
 def gameweek_meta_rows(conn: Connection) -> list[dict[str, Any]]:
     season = current_season_id(conn)
     rows = conn.execute(

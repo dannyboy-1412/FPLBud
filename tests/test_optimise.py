@@ -2,7 +2,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from fplcore.constants import SQUAD_SELECT
-from fplcore.optimise import HorizonSettings, PlayerOpt, pick_best_plan, solve_for_transfers
+from fplcore.optimise import (
+    HorizonSettings,
+    PlayerOpt,
+    optimise_horizon,
+    pick_best_plan,
+    solve_for_transfers,
+)
+from fplcore.rules import IncomingPlayer, SquadSlot, check_transfer
 
 
 def _squad() -> list[PlayerOpt]:
@@ -77,6 +84,37 @@ def test_hit_only_when_margin_cleared() -> None:
     settings = HorizonSettings(n=1, delta=0.85, hit_margin=2.0, roll_value=2.0, max_hits_default=1)
     best, _, _ = pick_best_plan({0: roll, 1: one}, free_transfers=1, settings=settings, max_hits=1)
     assert best.transfers_in in {0, 1}
+
+
+def _assert_moves_legal(players: list[PlayerOpt], bank: int) -> None:
+    solved = optimise_horizon(players, bank=bank, free_transfers=1, horizon=1, max_hits=0)
+    by_id = {player.id: player for player in players}
+    squad = [
+        SquadSlot(player.id, player.position_id, player.team_id, player.sell)
+        for player in players
+        if player.in_squad
+    ]
+    for move in solved["best"].moves:
+        incoming = by_id[move.in_id]
+        verdict = check_transfer(
+            squad,
+            move.out_id,
+            IncomingPlayer(
+                incoming.id,
+                incoming.position_id,
+                incoming.team_id,
+                incoming.cost,
+                incoming.can_in,
+            ),
+            bank=bank,
+        )
+        assert verdict.legal, verdict.message
+
+
+@given(bank=st.integers(min_value=0, max_value=40))
+@settings(max_examples=2, deadline=None)
+def test_every_optimiser_move_is_legal(bank: int) -> None:
+    _assert_moves_legal(_squad(), bank)
 
 
 @given(bank=st.integers(min_value=0, max_value=200))

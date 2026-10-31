@@ -51,7 +51,9 @@ Source root: `api/src/api/`.
 | `routers/players.py` | `GET /players`, `GET /players/{id}`. |
 | `routers/stats.py` | Market, insights, `GET /me/stats/squad`, `GET /me/stats/season`. |
 | `routers/me.py` | Profile, team save, import, suggested XI/transfers, account delete. |
-| `routers/agent.py` | Rerun, latest run, `GET /agent/runs/{run_id}`. |
+| `routers/agent.py` | Rerun, latest run via `latest_succeeded_run`, `GET /agent/runs/{run_id}`. |
+| `routers/chat.py` | Threads, SSE messages, feedback, usage, memory. `chat_user` checks the bearer token before it borrows a connection, and the stream does not use `deps.db_conn`. |
+| `chat/` | Context, tools, SSE framing, runtime caps. Tools call `services` on a short connection. |
 
 ## Request path
 

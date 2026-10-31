@@ -1,0 +1,375 @@
+[
+  {
+    "id": "saved-plan",
+    "group": "plans",
+    "question": "What does my plan say?",
+    "answer": "The saved plan says roll the transfer.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 1,
+              "headline": "Roll the transfer"
+            }
+          ],
+          "stale": false
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "roll the transfer"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "stale-plan",
+    "group": "plans",
+    "question": "Is the plan fresh?",
+    "answer": "The saved plan is older than the current data.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 1,
+              "headline": "Roll the transfer"
+            }
+          ],
+          "stale": true
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "older"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "hit-plan",
+    "group": "plans",
+    "question": "Does the plan take a hit?",
+    "answer": "The saved plan takes a hit.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 1,
+              "headline": "Sell Salah, buy Saka",
+              "hits": 1
+            }
+          ]
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "hit"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "chip-heuristic",
+    "group": "plans",
+    "question": "Should I play my wildcard?",
+    "answer": "Chip timing is a heuristic, not part of the solve.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [],
+          "chips_are_heuristic": true
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "heuristic"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "illegal-budget",
+    "group": "plans",
+    "question": "Can I bring Haaland in for Raya?",
+    "answer": "That costs more than the selling price plus the bank.",
+    "tools": [
+      {
+        "name": "evaluate_transfer",
+        "arguments": {
+          "out_player_id": 1,
+          "in_player_id": 13
+        },
+        "data": {
+          "legal": false,
+          "code": "BUDGET",
+          "message": "That costs more than the selling price plus the bank."
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "selling price"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "legal-move",
+    "group": "plans",
+    "question": "Is Senesi for Collins legal?",
+    "answer": "That transfer is legal.",
+    "tools": [
+      {
+        "name": "evaluate_transfer",
+        "arguments": {
+          "out_player_id": 4,
+          "in_player_id": 3
+        },
+        "data": {
+          "legal": true,
+          "code": null,
+          "message": "Legal."
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "legal"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "optimiser",
+    "group": "plans",
+    "question": "Re-solve the next gameweek.",
+    "answer": "The solve says roll the transfer.",
+    "tools": [
+      {
+        "name": "run_transfer_optimiser",
+        "arguments": {
+          "horizon": 1
+        },
+        "data": {
+          "headline": "Roll the transfer",
+          "hits": 0,
+          "transfers": [],
+          "chips_are_heuristic": true
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "roll the transfer"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "no-plan",
+    "group": "plans",
+    "question": "Show my saved plan.",
+    "answer": "There is no saved plan yet.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "code": "NO_PLAN",
+          "message": "There is no saved plan yet."
+        },
+        "ok": false
+      }
+    ],
+    "contains": [
+      "no saved plan"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "optimiser-capped",
+    "group": "plans",
+    "question": "Solve it again.",
+    "answer": "The optimiser has been used enough this hour.",
+    "tools": [
+      {
+        "name": "run_transfer_optimiser",
+        "arguments": {
+          "horizon": 1
+        },
+        "data": {
+          "code": "RATE_LIMITED",
+          "message": "The optimiser has been used enough this hour."
+        },
+        "ok": false
+      }
+    ],
+    "contains": [
+      "enough this hour"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "locked",
+    "group": "plans",
+    "question": "Solve it but keep Haaland.",
+    "answer": "The solve keeps Haaland.",
+    "tools": [
+      {
+        "name": "run_transfer_optimiser",
+        "arguments": {
+          "horizon": 1,
+          "lock_ids": [
+            13
+          ]
+        },
+        "data": {
+          "headline": "Roll the transfer",
+          "transfers": [],
+          "captain_id": 13
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "Haaland"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "excluded",
+    "group": "plans",
+    "question": "Solve it without Salah.",
+    "answer": "The solve does not include a move for Salah.",
+    "tools": [
+      {
+        "name": "run_transfer_optimiser",
+        "arguments": {
+          "horizon": 1,
+          "exclude_ids": [
+            12
+          ]
+        },
+        "data": {
+          "headline": "Roll the transfer",
+          "transfers": []
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "Salah"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "horizon-3",
+    "group": "plans",
+    "question": "What about the next three gameweeks?",
+    "answer": "The three-gameweek headline is roll the transfer.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 3,
+              "headline": "Roll the transfer"
+            }
+          ]
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "three-gameweek"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "roll",
+    "group": "plans",
+    "question": "Should I roll?",
+    "answer": "Yes. The saved plan says roll the transfer.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 1,
+              "headline": "Roll the transfer",
+              "hits": 0
+            }
+          ]
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "roll the transfer"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "preference",
+    "group": "plans",
+    "question": "Remember that I like differentials.",
+    "answer": "I can save that once you confirm.",
+    "tools": [
+      {
+        "name": "save_preference",
+        "arguments": {
+          "key": "prefers_differentials",
+          "value": "yes"
+        },
+        "data": {
+          "proposal_id": 4,
+          "key": "prefers_differentials",
+          "value": "yes",
+          "label": "Prefer differentials"
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "confirm"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "cannot-buy",
+    "group": "plans",
+    "question": "Can I buy that unavailable player?",
+    "answer": "That player cannot be transferred in.",
+    "tools": [
+      {
+        "name": "evaluate_transfer",
+        "arguments": {
+          "out_player_id": 8,
+          "in_player_id": 40
+        },
+        "data": {
+          "legal": false,
+          "code": "CANNOT_TRANSACT",
+          "message": "That player cannot be transferred in."
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "cannot be transferred"
+    ],
+    "grounding": "ok"
+  }
+]

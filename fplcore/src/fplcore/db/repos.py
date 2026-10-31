@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from psycopg import Connection
@@ -10,12 +10,17 @@ from psycopg.types.json import Json
 
 from fplcore.constants import (
     AGENT_RUN_KEEP_HOURS,
+    CHAT_PROPOSAL_RETENTION_DAYS,
+    CHAT_THREAD_RETENTION_DAYS,
+    CHAT_TRACE_RETENTION_DAYS,
+    CHAT_USAGE_RETENTION_DAYS,
     DAILY_SNAPSHOT_RETENTION_DAYS,
     ENTRY_CACHE_PRUNE_SECONDS,
     LOG_RETENTION_DAYS,
     MATCH_STATS_RETENTION_ROUNDS,
     METRIC_FORWARD_GWS,
 )
+from fplcore.db.chat_repo import prune_chat
 from fplcore.metrics.compute import MetricRow
 from fplcore.models import BootstrapStatic, ElementSummary, Fixture, HistoryRow
 from fplcore.team_import import TeamSnapshot
@@ -573,6 +578,22 @@ def _delete(conn: Connection, sql: str, params: list[Any] | None = None) -> int:
     return int(result.rowcount or 0)
 
 
+def latest_succeeded_run(conn: Connection, user_id: str) -> dict[str, Any] | None:
+    """Newest finished plan for this user. Shared by the dashboard and chat."""
+    row = conn.execute(
+        """
+        select * from agent_runs
+         where user_id = %s and status = 'succeeded'
+         order by finished_at desc nulls last
+         limit 1
+        """,
+        [user_id],
+    ).fetchone()
+    if row is None:
+        return None
+    return cast(dict[str, Any], row)
+
+
 def prune_retention(conn: Connection) -> dict[str, int]:
     nxt = _next_gw(conn)
     windows = retention_windows(nxt) if nxt is not None else None
@@ -666,5 +687,14 @@ def prune_retention(conn: Connection) -> dict[str, int]:
            )
         """,
         [LOG_RETENTION_DAYS],
+    )
+    counts.update(
+        prune_chat(
+            conn,
+            thread_days=CHAT_THREAD_RETENTION_DAYS,
+            trace_days=CHAT_TRACE_RETENTION_DAYS,
+            usage_days=CHAT_USAGE_RETENTION_DAYS,
+            proposal_days=CHAT_PROPOSAL_RETENTION_DAYS,
+        )
     )
     return counts

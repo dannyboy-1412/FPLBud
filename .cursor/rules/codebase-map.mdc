@@ -31,7 +31,9 @@ Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm 
 - `agent/` — queue (`queue.py`), run (`runner.py`), chip advice (`chips.py`)
 - `explain/` — template text; the LLM explainer is optional and off by default
 - `stats/` — market, insights, squad and season reports
-- `db/` — Postgres connection plus `repos.py` and `stats_repo.py`
+- `rules.py` — transfer legality used by chat and checked against the optimiser
+- `chat/` — assistant loop, events, prompt, guard. Import submodules directly
+- `db/` — Postgres connection, `repos.py`, `stats_repo.py` and `chat_repo.py`
 - `settings.py`, `constants.py`
 
 ## `api` (`api/src/api/`)
@@ -42,13 +44,15 @@ Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm 
 - `routers/suggestions.py` — `POST /suggestions` (guests are locked to horizon 1 and default weights)
 - `routers/players.py`, `routers/stats.py`, `routers/meta.py`, `routers/health.py`
 - `routers/me.py` — profile, team import, account delete
-- `routers/agent.py` — rerun and run polling
+- `routers/agent.py` — rerun and run polling. Latest succeeded run comes from `fplcore.db.repos.latest_succeeded_run`
+- `routers/chat.py` and `chat/` — SSE assistant. The stream authenticates with `chat_user` and does not hold `deps.db_conn`
 
 ## `web` (Next.js 16 App Router)
 
 Read `web/AGENTS.md` before using Next.js APIs.
 
-- `app/(site)/` — `/`, `/try/[entryId]`, `/dashboard` (plus `/squad`, `/plans`, `/insights`), `/settings`, `/onboarding`, `/how-it-works`
+- `app/(site)/` — `/`, `/try/[entryId]`, `/dashboard` (plus `/squad`, `/plans`, `/insights`), `/chat`, `/settings`, `/onboarding`, `/how-it-works`
+- `app/api/chat/stream/route.ts` — session proxy in front of the SSE route. `lib/chat.ts` parses the events
 - `app/login`, `app/auth/callback` — Google sign-in
 - `components/programme/` — shared editorial UI (pitch, plans, forms)
 - `components/dashboard/` — signed-in dashboard and stats

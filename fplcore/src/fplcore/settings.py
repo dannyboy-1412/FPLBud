@@ -71,7 +71,48 @@ class Settings(BaseSettings):
     user_rate_limit_per_minute: int = 30
     agent_rerun_limit_per_hour: int = 6
 
+    chat_enabled: bool = False
+    chat_llm_model: str = ""
+    chat_llm_fallback_model: str = ""
+    chat_llm_base_url: str = ""
+    chat_llm_api_key: str = ""
+    chat_price_input_per_mtok: float | None = None
+    chat_price_output_per_mtok: float | None = None
+    chat_price_cached_per_mtok: float | None = None
+    chat_max_tool_rounds: int = 6
+    chat_max_tool_calls: int = 10
+    chat_turn_timeout_seconds: float = 60
+    chat_max_output_tokens: int = 900
+    chat_turn_input_token_cap: int = 40_000
+    chat_max_input_chars: int = 1500
+    chat_history_token_budget: int = 6000
+    chat_tool_result_token_cap: int = 1500
+    chat_max_concurrent_turns: int = 4
+    chat_user_turns_per_day: int = 20
+    chat_user_turns_per_day_noteam: int = 10
+    chat_user_turns_per_minute: int = 4
+    chat_user_optimiser_per_hour: int = 20
+    chat_global_daily_cost_usd: float = 2.0
+    chat_guest_enabled: bool = False
+    chat_retention_days: int = 90
+    chat_trace_retention_days: int = 14
+    chat_store_tool_results: bool = True
+    chat_allowed_user_ids: str = ""
+    chat_admin_user_ids: str = ""
+
     cors_allowed_origins: str = "http://localhost:3000,https://fplbud.vercel.app"
+
+    @field_validator(
+        "chat_price_input_per_mtok",
+        "chat_price_output_per_mtok",
+        "chat_price_cached_per_mtok",
+        mode="before",
+    )
+    @classmethod
+    def blank_price_is_unset(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        return value
 
     @field_validator("fpl_api_base_url")
     @classmethod
@@ -89,6 +130,26 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return split_origins(self.cors_allowed_origins)
+
+    @property
+    def resolved_chat_model(self) -> str:
+        return self.chat_llm_model or self.llm_model
+
+    @property
+    def resolved_chat_api_key(self) -> str:
+        return self.chat_llm_api_key or self.llm_api_key
+
+    @property
+    def resolved_chat_base_url(self) -> str:
+        return (self.chat_llm_base_url or self.llm_base_url).rstrip("/")
+
+    @property
+    def chat_allowed_ids(self) -> set[str]:
+        return {item.strip() for item in self.chat_allowed_user_ids.split(",") if item.strip()}
+
+    @property
+    def chat_admin_ids(self) -> set[str]:
+        return {item.strip() for item in self.chat_admin_user_ids.split(",") if item.strip()}
 
 
 @lru_cache(maxsize=1)

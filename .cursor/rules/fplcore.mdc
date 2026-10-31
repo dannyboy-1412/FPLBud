@@ -42,13 +42,16 @@ Source root: `fplcore/src/fplcore/`.
 | `agent/runner.py` | `run_claimed`: horizons 1, 3 and 5, chip advice, explanations, rewrite `agent_suggestions`. |
 | `agent/chips.py` | Rule thresholds for bench boost, triple captain, free hit, wildcard. |
 | `explain/` | `Explainer` protocol, `TemplateExplainer` (default), `LLMExplainer` (only when `LLM_ENABLED`), `get_explainer`. |
-| `llm.py` | `OpenRouterClient` for lineup, transfer advice, squad-score sentences, and the explainer. `grounding_ok` checks names and numbers. |
+| `llm.py` | `OpenRouterClient` for lineup, transfer advice, squad-score sentences, and the explainer. `grounding_ok` checks numbers only. Chat answers are checked in `chat/guard.py`. |
 | `lineup.py` | Suggested XI for a saved squad. Model first; `lineup_from_optimiser` if the model is off or rejects the XI. |
 | `transfer_advice.py` | This-week transfer advice over horizon 3 with `max_hits=0`. Model may pick among legal optimiser plans; the rules in `advice_from_plans` are the fallback. |
 | `stats/` | Market, insights, squad, season, and the 0–10 squad score (`stats/report.py`, `stats/score_reason.py`). Pure functions over rows the API loads. |
 | `db/connection.py` | `connect`, pool, `pooled_connection`. |
-| `db/repos.py` | Upserts, entry cache, snapshots, metric replace, suggested XI/transfer cache, `prune_retention`. |
-| `db/stats_repo.py` | Read queries for stats and gameweek picking. |
+| `rules.py` | `check_transfer`: position, selling-price budget, three per club, already owned, `can_transact`. |
+| `chat/` | Assistant loop, tool registry, prompt, budgets, output guard. No FastAPI imports. |
+| `db/repos.py` | Upserts, entry cache, snapshots, metric replace, suggested XI/transfer cache, `latest_succeeded_run`, `prune_retention` (includes chat retention). |
+| `db/chat_repo.py` | Threads, turns, tool spans, memory proposals, daily and global caps. |
+| `db/stats_repo.py` | Read queries for stats and gameweek picking. `fixtures_for` covers several gameweeks plus unscheduled fixtures. |
 | `gameweeks.py` | `pick_upcoming_gameweek` / `pick_started_gameweek` when `is_next` is stale. |
 | `constants.py` | Default weights, squad shape, projection fallbacks `a=1`, `b=6`, retention windows, metric labels. |
 | `settings.py` | `Settings` / `get_settings()`. Env lives in the repo-root `.env`. |
@@ -93,9 +96,9 @@ HTTP routes, JWT checks, CORS, and slowapi limits belong in `api`. Cron decision
 - The agent plans transfers for now and holds that squad across the horizon. It does not schedule future transfer weeks.
 - `claim_run` must stay `SKIP LOCKED`. Two workers (API loop and the GitHub Action) drain the same table.
 - `run_claimed` commits progress mid-run so polling sees stages, then commits suggestions and `finish_run` together on success. On exception it rolls back and still `finish_run(..., ok=False)`.
-- LLM output is checked against the input (`grounding_ok`, `LineupRejected`, `TransferRejected`). A failed or capped call keeps the deterministic text or plan.
+- LLM output is checked against the input (`grounding_ok` checks numbers only, plus `LineupRejected` and `TransferRejected`). A failed or capped call keeps the deterministic text or plan. Chat uses `chat/guard.py`, not `grounding_ok`.
 - `OpenRouterClient` for lineup, transfers and squad-score copy is gated on `llm_api_key` and `llm_model`. Agent plan prose is gated on `llm_enabled` as well.
-- Retention windows live in `constants.py` (`METRIC_FORWARD_GWS=6`, match stats 8 rounds, daily snapshots 8 days, entry cache prune 600s, finished agent runs 24h except the latest success per user and entry). `prune_retention` is the only deleter.
+- Retention windows live in `constants.py` (`METRIC_FORWARD_GWS=6`, match stats 8 rounds, daily snapshots 8 days, entry cache prune 600s, finished agent runs 24h except the latest success per user and entry, chat threads 90 days, tool results 14 days, chat usage 35 days). `prune_retention` is the only deleter.
 
 ## Tests
 

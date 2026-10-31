@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   python:
@@ -14,8 +15,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --frozen --all-packages --dev
-      - run: uv run ruff check fplcore ingest api tests scripts
-      - run: uv run pytest -q
+      - run: uv run ruff check fplcore ingest api tests scripts evals
+      - run: uv run pytest -q -m "not db"
 
   web:
     runs-on: ubuntu-latest
@@ -34,5 +35,45 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint --max-warnings=10
+      - run: pnpm test
       - run: pnpm exec next typegen
       - run: pnpm exec tsc --noEmit
+
+  chat:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fplbud
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fplbud?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --all-packages --dev
+      - run: uv run pytest -q -m db
+      - run: uv run pytest -q tests/test_chat_evals.py
+
+  chat-live:
+    if: github.event_name == 'workflow_dispatch' && github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --all-packages --dev
+      - run: uv run python -m evals.chat.runner --mode live --limit 3
+        env:
+          CHAT_LLM_API_KEY: ${{ secrets.CHAT_LLM_API_KEY }}

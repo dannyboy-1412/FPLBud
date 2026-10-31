@@ -1238,6 +1238,25 @@ From `docs/ARCHITECTURE.md` (repo) and my box-copy `ARCHITECTURE.md` vs the code
 
 **Caveats on this list:** I read the signatures, the services layer, the routers listed at the top and the DB repos; I did not run the code, the tests, or the migrations. M4's token-rotation detail is general Supabase knowledge, not verified here. Anything flagged **[verify]** should be checked in the repo at build time.
 
+### Corrections applied when H0–H3 were built (31 Oct 2026)
+
+Checked against the repo. Later chat changes belong in a new migration, not in `010`.
+
+| Spec said | Code does |
+|---|---|
+| Migration `008_chat.sql` | `008_suggested_transfers.sql` and `009_squad_score_reasons.sql` already exist. Chat is `db/migrations/010_chat.sql`, merged into `db/schema.sql` |
+| Reuse `grounding_ok` for names and numbers | `fplcore/llm.py` `grounding_ok` checks numbers only. Chat validation is `fplcore/chat/guard.py` |
+| `snapshot_from_cache` is enough for a stored squad | `snapshot_from_row` is on `fplcore/team_import.py`. Chat never calls FPL during a turn |
+| Chat SQL in `api/chat/store.py` | Persistence and caps are `fplcore/db/chat_repo.py`, including the atomic `chat_usage` upsert |
+| `stats_repo.next_event_fixtures` covers a window | That helper is the next gameweek only. `fixtures_for(conn, season, gws, team=None)` covers a window and rows whose `event` is null |
+| The optimiser exposes a legality check | `fplcore/rules.py` `check_transfer`. The optimiser still hard-codes a 3-per-club limit |
+| Insights key `defensive_contributions` | The payload key is `defensive`. Ownership thresholds are `TEMPLATE_OWNERSHIP=20` and `DIFFERENTIAL_OWNERSHIP=10` |
+| `sse-starlette` | FastAPI 0.143 / Starlette 1.8. `StreamingResponse` frames the events. The stream does not use `deps.db_conn` |
+| Sentry already scrubs chat | `api/main.py` sets `send_default_pii=False` and a `before_send` hook that drops request data for `/chat` |
+| Next.js middleware and shadcn | The app uses `web/proxy.ts`. `/chat` is in the protected list. There is no player page, so citation chips do not link anywhere |
+| An admin page for traces | `python -m api.chat.replay <turn_id>`. Production with an empty `CHAT_ADMIN_USER_IDS` refuses it |
+| Tests can use the live database | `pytest -m db` loads `evals/chat/world` into Postgres only when `TEST_DATABASE_URL` contains `sslmode=disable` and is not a Supabase host |
+
 ---
 
 ## 20. Sources

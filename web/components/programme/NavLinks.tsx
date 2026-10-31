@@ -32,6 +32,7 @@ export function NavLinks() {
   return (
     <>
       <NavItem href="/dashboard" label="Dashboard" current={pathname.startsWith("/dashboard")} />
+      <NavItem href="/chat" label="Assistant" current={pathname.startsWith("/chat")} />
     </>
   );
 }

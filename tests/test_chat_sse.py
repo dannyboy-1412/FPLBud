@@ -38,7 +38,7 @@ class Conn:
 
 
 def _settings(**overrides: object) -> Settings:
-    base: dict[str, object] = {"chat_enabled": True, "chat_llm_model": "scripted", "chat_max_concurrent_turns": 4}
+    base: dict[str, object] = {"chat_max_concurrent_turns": 4}
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
 
@@ -233,7 +233,7 @@ def test_sign_in_required(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_chat_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime, _opens, _script = _wire(monkeypatch, _start)
-    runtime.settings = _settings(chat_enabled=False)
+    monkeypatch.setattr(runtime_mod.constants, "CHAT_ENABLED", False)
     with TestClient(_app(runtime)) as client:
         response = client.post(
             f"/chat/threads/{THREAD}/messages",

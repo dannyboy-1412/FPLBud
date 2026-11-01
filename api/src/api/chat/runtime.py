@@ -19,6 +19,7 @@ from psycopg_pool import ConnectionPool
 from api.chat.context import build_context
 from api.chat.history import prompt_messages, rows_for_round
 from api.chat.tools import build_registry
+from fplcore import constants
 from fplcore.chat.events import (
     ChatEvent,
     Citation,
@@ -117,7 +118,7 @@ class ChatRuntime:
         self.breaker = Breaker()
 
     def enabled_for(self, user_id: str) -> bool:
-        if not self.settings.chat_enabled:
+        if not constants.CHAT_ENABLED:
             return False
         allowed = self.settings.chat_allowed_ids
         return not allowed or user_id in allowed

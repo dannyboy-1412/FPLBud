@@ -286,7 +286,7 @@ Validate with pydantic, rate-limit with slowapi (per IP for guests, per `sub` fo
 
 ## 7A. Chat assistant
 
-Signed-in only. `CHAT_ENABLED` defaults to false. When `CHAT_ALLOWED_USER_IDS` is set, only those user ids can open a thread.
+Signed-in only. Whether chat is on, and which model it uses, are `CHAT_ENABLED` and `CHAT_MODEL` in `fplcore/constants.py`. When `CHAT_ALLOWED_USER_IDS` is set, only those user ids can open a thread.
 
 The loop lives in `fplcore/chat` and does not import FastAPI. `api/chat` builds the pinned context, the tools, and the SSE stream. The web app does not call Render directly: `POST /api/chat/stream` reads the Supabase session and pipes `POST /chat/threads/{id}/messages`.
 
@@ -361,10 +361,9 @@ Next.js middleware redirects `/onboarding`, `/dashboard` and `/settings` to `/lo
 | **New:** `GUEST_RATE_LIMIT_PER_MINUTE` | api | per-IP limit for public endpoints (suggested 10) |
 | **New:** `USER_RATE_LIMIT_PER_MINUTE` | api | per-user limit for `/me*` and `/suggestions` (suggested 30) |
 | **New:** `AGENT_RERUN_LIMIT_PER_HOUR` | api | manual re-runs and weight-change re-runs per user (suggested 6) |
-| `CHAT_ENABLED` | api | Master switch. Default false |
-| `CHAT_ALLOWED_USER_IDS` | api | Comma-separated user ids. Empty means every signed-in user, once chat is on |
+| `CHAT_ALLOWED_USER_IDS` | api | Comma-separated user ids. Empty means every signed-in user |
 | `CHAT_ADMIN_USER_IDS` | api | Required in production before `python -m api.chat.replay` will print a turn |
-| `CHAT_LLM_API_KEY`, `CHAT_LLM_BASE_URL`, `CHAT_MODEL`, `CHAT_FALLBACK_MODEL` | api | OpenAI-compatible tool-calling model. Separate from `LLM_DAILY_CALL_CAP` |
+| `CHAT_LLM_API_KEY`, `CHAT_LLM_BASE_URL`, `CHAT_LLM_FALLBACK_MODEL` | api | Key and endpoint for the model named by `CHAT_MODEL`. Separate from `LLM_DAILY_CALL_CAP` |
 | `CHAT_USER_TURNS_PER_DAY`, `CHAT_USER_TURNS_PER_DAY_NOTEAM` | api | Daily question caps (20 with a saved team, 10 without) |
 | `CHAT_GLOBAL_DAILY_USD`, `CHAT_USER_OPTIMISER_PER_HOUR` | api | Spend cap and optimiser cap |
 

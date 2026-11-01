@@ -188,7 +188,7 @@ The harness defines the stream once in Python (`fplcore/chat/events.py`) and exp
 **States:**
 - Not signed in: login screen with the browser and `--no-browser` options.
 - Signed in, no saved team: banner "Add your team at <site>/onboarding". General chat still works, matching the harness tiers.
-- Chat disabled (`CHAT_ENABLED=false`, or 404 on `/chat/*`): "Chat isn't available yet". Squad and plan views still work.
+- Chat disabled (`CHAT_ENABLED` is false in `fplcore/constants.py`, or 404 on `/chat/*`): "Chat isn't available yet". Squad and plan views still work.
 - Capped: the composer is replaced by the reset time.
 - Server waking up (Render cold start): "Waking the server…" after 5 s.
 

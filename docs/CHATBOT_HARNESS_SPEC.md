@@ -1256,6 +1256,7 @@ Checked against the repo. Later chat changes belong in a new migration, not in `
 | Next.js middleware and shadcn | The app uses `web/proxy.ts`. `/chat` is in the protected list. There is no player page, so citation chips do not link anywhere |
 | An admin page for traces | `python -m api.chat.replay <turn_id>`. Production with an empty `CHAT_ADMIN_USER_IDS` refuses it |
 | Tests can use the live database | `pytest -m db` loads `evals/chat/world` into Postgres only when `TEST_DATABASE_URL` contains `sslmode=disable` and is not a Supabase host |
+| `CHAT_ENABLED` and `CHAT_LLM_MODEL` are environment variables | They are `CHAT_ENABLED` and `CHAT_MODEL` in `fplcore/constants.py`. The API key and base URL stay in the environment |
 
 ---
 

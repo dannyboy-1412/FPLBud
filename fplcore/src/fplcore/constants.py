@@ -42,6 +42,10 @@ METRIC_FORWARD_GWS = 6
 DAILY_SNAPSHOT_RETENTION_DAYS = 8
 AGENT_RUN_KEEP_HOURS = 24
 LOG_RETENTION_DAYS = 14
+# Chat is on for every signed-in user unless CHAT_ALLOWED_USER_IDS narrows it.
+# The model id is the OpenRouter tool-calling model. The API key stays in the environment.
+CHAT_ENABLED = True
+CHAT_MODEL = "openai/gpt-6-luna"
 CHAT_THREAD_RETENTION_DAYS = 90
 CHAT_TRACE_RETENTION_DAYS = 14
 CHAT_USAGE_RETENTION_DAYS = 35

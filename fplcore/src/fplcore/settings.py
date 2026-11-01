@@ -4,6 +4,8 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from fplcore.constants import CHAT_MODEL
+
 
 def _repo_root() -> Path:
     here = Path(__file__).resolve()
@@ -71,8 +73,6 @@ class Settings(BaseSettings):
     user_rate_limit_per_minute: int = 30
     agent_rerun_limit_per_hour: int = 6
 
-    chat_enabled: bool = False
-    chat_llm_model: str = ""
     chat_llm_fallback_model: str = ""
     chat_llm_base_url: str = ""
     chat_llm_api_key: str = ""
@@ -133,7 +133,7 @@ class Settings(BaseSettings):
 
     @property
     def resolved_chat_model(self) -> str:
-        return self.chat_llm_model or self.llm_model
+        return CHAT_MODEL
 
     @property
     def resolved_chat_api_key(self) -> str:

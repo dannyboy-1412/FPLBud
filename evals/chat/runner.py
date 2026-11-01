@@ -18,6 +18,7 @@ from fplcore.chat.prompt import SYSTEM_PROMPT, ContextView
 from fplcore.chat.registry import BoundTool, ToolRegistry, null_connection
 from fplcore.chat.testing import ScriptedLlm, text_turn, tool_turn
 from fplcore.chat.types import ChatCfg, Message, ToolContext, ToolResult, failure
+from fplcore.constants import CHAT_MODEL
 
 ROOT = Path(__file__).resolve().parents[2]
 CASE_DIR = ROOT / "evals" / "chat" / "cases"
@@ -176,7 +177,7 @@ async def _live(selected: list[dict[str, Any]]) -> None:
     client = OpenAICompatClient(
         api_key=key,
         base_url=os.environ.get("CHAT_LLM_BASE_URL", "https://openrouter.ai/api/v1"),
-        model=os.environ.get("CHAT_MODEL", "openai/gpt-4o-mini"),
+        model=CHAT_MODEL,
     )
     try:
         failed = 0

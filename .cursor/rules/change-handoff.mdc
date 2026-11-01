@@ -1,0 +1,10 @@
+---
+description: After a feature or fix, explain what changed and what to test
+alwaysApply: true
+---
+
+# Change handoff
+
+Before the final response on a task that added a feature, fixed a bug, or otherwise changed behavior, read and follow `.cursor/skills/change-handoff/SKILL.md`.
+
+Skip when the task was a question, a review, or a plan with no behavior change, or when the only edits are formatting, comments, or docs. Skip when the user asks not to include the handoff.

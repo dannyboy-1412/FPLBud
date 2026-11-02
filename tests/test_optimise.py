@@ -117,6 +117,60 @@ def test_every_optimiser_move_is_legal(bank: int) -> None:
     _assert_moves_legal(_squad(), bank)
 
 
+def test_forbidden_incoming_picks_someone_else() -> None:
+    players = _squad()
+    first = solve_for_transfers(
+        players,
+        bank=100,
+        free_transfers=1,
+        transfers_in_target=1,
+        horizon=1,
+        delta=0.85,
+    )
+    assert first is not None and first.moves
+    blocked = frozenset(move.in_id for move in first.moves)
+    second = solve_for_transfers(
+        players,
+        bank=100,
+        free_transfers=1,
+        transfers_in_target=1,
+        horizon=1,
+        delta=0.85,
+        forbidden_incoming=[blocked],
+    )
+    assert second is not None and second.moves
+    assert frozenset(move.in_id for move in second.moves) != blocked
+    assert len(second.squad_ids) == 15
+    assert len(second.xi_ids) == 11
+    assert second.captain_id in second.xi_ids
+    by_id = {player.id: player for player in players}
+    for pos, count in SQUAD_SELECT.items():
+        assert sum(1 for pid in second.squad_ids if by_id[pid].position_id == pos) == count
+    clubs: dict[int, int] = {}
+    for pid in second.squad_ids:
+        clubs[by_id[pid].team_id] = clubs.get(by_id[pid].team_id, 0) + 1
+    assert max(clubs.values()) <= 3
+    assert second.bank_after >= 0
+
+
+def test_horizon_returns_distinct_alternatives() -> None:
+    solved = optimise_horizon(
+        _squad(),
+        bank=100,
+        free_transfers=1,
+        horizon=1,
+        max_hits=0,
+        alternatives_per_count=3,
+    )
+    alternatives = solved["alternatives"][1]
+    assert len(alternatives) == 3
+    incoming = [frozenset(move.in_id for move in plan.moves) for plan in alternatives]
+    assert len(set(incoming)) == len(incoming)
+    assert solved["all"][1].moves[0].in_id == alternatives[0].moves[0].in_id
+    once = optimise_horizon(_squad(), bank=100, free_transfers=1, horizon=1, max_hits=0)
+    assert len(once["alternatives"][1]) == 1
+
+
 @given(bank=st.integers(min_value=0, max_value=200))
 @settings(max_examples=8, deadline=None)
 def test_budget_never_negative(bank: int) -> None:

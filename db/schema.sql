@@ -192,12 +192,12 @@ create table player_metrics (
   horizon       smallint not null default 1,   -- number of GWs aggregated, starting at computed_for_gw
   -- default metrics
   form_raw      numeric(6,3),  form_score      numeric(5,4),
-  fixture_raw   numeric(6,3),  fixture_score   numeric(5,4),   -- mean ease = (5 - FDR)/4 across that GW's fixtures
+  fixture_raw   numeric(6,3),  fixture_score   numeric(5,4),   -- mean ease: half FDR (5-FDR)/4, half opponent form
   home_raw      numeric(6,3),  home_score      numeric(5,4),   -- home share across the horizon, with a split adjustment
   xgi_raw       numeric(6,3),  xgi_score       numeric(5,4),   -- position-weighted xG/xA per 90 (recent plus season blend)
   -- optional metrics
   value_raw     numeric(6,3),  value_score     numeric(5,4),   -- points per £m
-  minutes_raw   numeric(6,3),  minutes_score   numeric(5,4),   -- start probability proxy
+  minutes_raw   numeric(6,3),  minutes_score   numeric(5,4),   -- recent start rate times time on the pitch
   trend_raw     numeric(8,3),  trend_score     numeric(5,4),   -- net transfers / ownership momentum
   fixture_count smallint not null,             -- 0 = blank, 2 = double, across the horizon
   availability  numeric(4,3) not null,         -- chance_of_playing/100 (1.0 when null and status 'a')

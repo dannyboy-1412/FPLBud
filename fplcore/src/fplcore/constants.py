@@ -32,8 +32,13 @@ SQUAD_SCORE_LOW_PERCENTILE = 25.0
 SQUAD_SCORE_HIGH_PERCENTILE = 98.0
 
 FORM_EWMA_ALPHA = 0.5
+MINUTES_EWMA_ALPHA = 0.4
+START_POINTS_FLOOR = 0.35
 XGI_MINUTES_PRIOR = 270
 TREND_DEADLINE_HOURS_FLOOR = 1.0
+TEAM_FORM_MATCHES = 6
+TEAM_FORM_PRIOR_MATCHES = 3
+FIXTURE_FORM_WEIGHT = 0.5
 
 ENTRY_CACHE_TTL_SECONDS = 300
 ENTRY_CACHE_PRUNE_SECONDS = 600
@@ -73,10 +78,10 @@ METRIC_LABELS: dict[str, str] = {
 
 METRIC_DESCRIPTIONS: dict[str, str] = {
     "form": "Recent points blended with FPL's own form rating.",
-    "fixture": "How easy the next fixtures look, from the FDR.",
+    "fixture": "How easy the next fixtures look, from the FDR and the opponent's recent form.",
     "home": "Share of upcoming fixtures played at home.",
     "xgi": "Expected goals and assists, shrunk toward the position mean.",
     "value": "Points per million of price.",
-    "minutes": "How securely the player starts and completes matches.",
+    "minutes": "How often the player has started lately, and how much of the match they play.",
     "trend": "Transfer momentum and recent price movement.",
 }

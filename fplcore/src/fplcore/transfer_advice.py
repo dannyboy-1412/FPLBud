@@ -4,11 +4,15 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+import pandas as pd
+
 from fplcore.constants import POSITION_SHORT
 from fplcore.llm import LlmError, OpenRouterClient
+from fplcore.metrics.compute import team_form_percentiles, team_form_ratings
 from fplcore.optimise import PlayerOpt, SolvedPlan, TransferMove, optimise_horizon
 from fplcore.settings import Settings
 
@@ -16,13 +20,13 @@ SUMMARY_LIMIT = 400
 PLAN_HORIZON = 3
 MAX_FREE_TRANSFERS = 5
 # Bumped when the transfer rules change, so a stored plan is rebuilt.
-TRANSFER_RULES_VERSION = 3
+TRANSFER_RULES_VERSION = 4
 # How sharply a points gap becomes a recommendation share. One point of
 # net value is a clear lean, not a coin toss.
 RECOMMENDATION_TEMPERATURE = 0.9
 # A shown alternative stays visible even when the points gap is wide.
 MIN_OPTION_PCT = 8
-MAX_SHOWN_OPTIONS = 4
+MAX_SHOWN_OPTIONS = 3
 _MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _BARE_URL = re.compile(r"https?://\S+")
 _SOURCE_PAREN = re.compile(r"\s*\([^()]*\.(?:com|app|co\.uk|org|net|io)[^()]*\)")
@@ -42,6 +46,7 @@ TRANSFER_SYSTEM = """You decide this gameweek's Fantasy Premier League transfers
 How those managers transfer:
 - Roll is the default. A free transfer is an asset. With one, bank it unless a move is clearly better than having two next week. With two or three, make only the moves that are obvious and leave the rest banked. With four or five, do not sit on transfers that cannot be banked, and still do not make a sideways move.
 - A clear move removes a player who will not play, or it is a real upgrade across the next few weeks: nailed minutes, a fixture run, or the underlying numbers. One awkward fixture is not a reason to sell. Last week's points are not a reason to buy.
+- fixtures lists the next gameweeks: opponent, home or away, FDR, opponent_attack and opponent_defence. Those last two are percentiles. A higher opponent_defence means the opponent is conceding more. A hard FDR against a leaky, out-of-form side is not a reason to sell.
 - Do not take a points hit. Never use more transfers than free_transfers.
 - Do not chase a price rise. Team news is worth more than moving early.
 - Search for injuries, suspensions, press-conference minutes and rotation for the clubs named below. Do not invent team news. If search is thin, keep the recommended alternative.
@@ -296,17 +301,33 @@ def summarise(
     return f"{lead} {_banked_sentence(spare)}"
 
 
-def _candidate_plans(plans: dict[int, SolvedPlan], free_transfers: int) -> dict[int, SolvedPlan]:
-    kept: dict[int, SolvedPlan] = {}
-    for count, plan in plans.items():
-        if plan.hits > 0 or plan.transfers_in != count:
+Plans = dict[int, SolvedPlan] | list[SolvedPlan]
+
+
+def _indexed_plans(plans: Plans) -> list[tuple[int | None, SolvedPlan]]:
+    if isinstance(plans, Mapping):
+        return [(int(count), plan) for count, plan in plans.items()]
+    return [(None, plan) for plan in plans]
+
+
+def _candidate_plans(plans: Plans, free_transfers: int) -> list[SolvedPlan]:
+    kept: list[SolvedPlan] = []
+    for count, plan in _indexed_plans(plans):
+        if count is not None and plan.transfers_in != count:
             continue
-        if count < 0 or count > free_transfers:
+        if plan.hits > 0:
             continue
-        if count > 0 and len(plan.moves) != count:
+        used = plan.transfers_in
+        if used < 0 or used > free_transfers:
             continue
-        kept[count] = plan
+        if used > 0 and len(plan.moves) != used:
+            continue
+        kept.append(plan)
     return kept
+
+
+def _roll_plan(plans: Sequence[SolvedPlan]) -> SolvedPlan | None:
+    return next((plan for plan in plans if plan.transfers_in == 0), None)
 
 
 def _shares(nets: dict[int, float]) -> dict[int, int]:
@@ -353,11 +374,29 @@ def _shares_for_choice(nets: dict[int, float], chosen_key: int) -> dict[int, int
     return _shares(adjusted)
 
 
-def _best_transfer(legal: dict[int, SolvedPlan], free_transfers: int) -> SolvedPlan | None:
-    transfers = [plan for count, plan in legal.items() if count > 0]
+def _best_transfer(legal: Sequence[SolvedPlan], free_transfers: int) -> SolvedPlan | None:
+    transfers = [plan for plan in legal if plan.transfers_in > 0 and plan.moves]
     if not transfers:
         return None
     return max(transfers, key=lambda plan: (_net(plan, free_transfers), -plan.transfers_in))
+
+
+def _shown_plans(legal: Sequence[SolvedPlan], chosen: SolvedPlan, free_transfers: int) -> list[SolvedPlan]:
+    """The roll, plus the two transfers with the best net value."""
+    roll = _roll_plan(legal)
+    transfers = [plan for plan in legal if plan.transfers_in > 0 and plan.moves]
+    transfers.sort(key=lambda plan: (_net(plan, free_transfers), -plan.transfers_in), reverse=True)
+    room = MAX_SHOWN_OPTIONS - (1 if roll is not None else 0)
+    picked = transfers[: max(room, 0)]
+    if chosen.transfers_in > 0 and not any(_pairs(plan) == _pairs(chosen) for plan in picked):
+        if picked:
+            picked = picked[:-1]
+        picked.append(chosen)
+    shown: list[SolvedPlan] = []
+    if roll is not None:
+        shown.append(roll)
+    shown.extend(picked)
+    return shown[:MAX_SHOWN_OPTIONS]
 
 
 def _option_reason(
@@ -400,30 +439,32 @@ def _option_reason(
 
 
 def _build_options(
-    legal: dict[int, SolvedPlan],
+    legal: Sequence[SolvedPlan],
     *,
     chosen: SolvedPlan,
     free_transfers: int,
     absent: set[int],
     chosen_reason: str | None,
 ) -> tuple[dict[str, Any], ...]:
-    if not legal:
+    shown = _shown_plans(legal, chosen, free_transfers)
+    if not shown:
         return ()
-    chosen_key = chosen.transfers_in if chosen.transfers_in in legal else 0
-    if chosen_key in legal and _pairs(legal[chosen_key]) != _pairs(chosen) and chosen.transfers_in == 0:
-        chosen_key = 0
-    nets = {count: _net(plan, free_transfers) for count, plan in legal.items()}
-    ranked = sorted(legal, key=lambda count: (nets[count], -count), reverse=True)
-    shown_keys = ranked[:MAX_SHOWN_OPTIONS]
-    if chosen_key not in shown_keys:
-        shown_keys = [chosen_key, *shown_keys[: MAX_SHOWN_OPTIONS - 1]]
-    shown = {key: legal[key] for key in shown_keys}
-    pcts = _shares_for_choice({key: nets[key] for key in shown}, chosen_key)
+    nets = {index: _net(plan, free_transfers) for index, plan in enumerate(shown)}
+    chosen_key = next(
+        (
+            index
+            for index, plan in enumerate(shown)
+            if plan.transfers_in == chosen.transfers_in and _pairs(plan) == _pairs(chosen)
+        ),
+        0,
+    )
+    pcts = _shares_for_choice(nets, chosen_key)
     rival = _best_transfer(shown, free_transfers)
+    roll = _roll_plan(shown)
     options: list[dict[str, Any]] = []
-    for count, plan in sorted(shown.items(), key=lambda item: pcts[item[0]], reverse=True):
-        is_chosen = count == chosen_key and _pairs(plan) == _pairs(legal.get(chosen_key, plan))
-        roll = shown.get(0)
+    for index in sorted(range(len(shown)), key=lambda item: pcts[item], reverse=True):
+        plan = shown[index]
+        is_chosen = index == chosen_key
         beats_roll = roll is not None and _net(plan, free_transfers) >= _net(roll, free_transfers)
         reason = chosen_reason if is_chosen and chosen_reason else _option_reason(
             plan,
@@ -438,7 +479,7 @@ def _build_options(
             {
                 "action": action,
                 "moves": [] if action == "roll" else [_move_dict(move) for move in plan.moves],
-                "recommended_pct": pcts[count],
+                "recommended_pct": pcts[index],
                 "reason": reason,
                 "chosen": is_chosen,
                 "starters": list(plan.xi_ids),
@@ -452,7 +493,7 @@ def _build_options(
 
 def _with_options(
     suggestion: TransferSuggestion,
-    legal: dict[int, SolvedPlan],
+    legal: Sequence[SolvedPlan],
     *,
     chosen: SolvedPlan,
     absent: set[int],
@@ -471,7 +512,7 @@ def _with_options(
 
 
 def advice_from_plans(
-    plans: dict[int, SolvedPlan],
+    plans: Plans,
     *,
     free_transfers: int,
     unavailable_ids: set[int],
@@ -486,7 +527,9 @@ def advice_from_plans(
     """
     available = max(0, min(MAX_FREE_TRANSFERS, int(free_transfers)))
     legal = _candidate_plans(plans, available)
-    roll = legal.get(0) or plans.get(0)
+    roll = _roll_plan(legal)
+    if roll is None and isinstance(plans, Mapping):
+        roll = plans.get(0)
     if roll is None:
         raise ValueError("roll plan (0 transfers) is required")
     labels = names or {}
@@ -495,9 +538,9 @@ def advice_from_plans(
     def rank(plan: SolvedPlan) -> tuple[float, int]:
         return (_net(plan, available), -plan.transfers_in)
 
-    chosen = max(legal.values(), key=rank) if legal else roll
+    chosen = max(legal, key=rank) if legal else roll
     if absent and not _fixes_absence(chosen, absent):
-        fixes = [plan for plan in legal.values() if _absence_fix(plan, roll, available, absent)]
+        fixes = [plan for plan in legal if _absence_fix(plan, roll, available, absent)]
         clearing = [plan for plan in fixes if _net(plan, available) >= _net(roll, available)]
         if clearing:
             chosen = max(clearing, key=rank)
@@ -588,7 +631,7 @@ def _parsed_moves(payload: dict[str, Any], reasons: list[str]) -> list[tuple[int
 
 def advice_from_model(
     payload: dict[str, Any],
-    plans: dict[int, SolvedPlan],
+    plans: Plans,
     *,
     policy: TransferSuggestion,
     free_transfers: int,
@@ -611,7 +654,7 @@ def advice_from_model(
         raise TransferRejected(reasons)
 
     legal = _candidate_plans(plans, free_transfers)
-    roll = legal.get(0)
+    roll = _roll_plan(legal)
     if roll is None:
         raise TransferRejected(["roll plan is missing"])
     absent = unavailable_ids & set(roll.xi_ids)
@@ -640,7 +683,7 @@ def advice_from_model(
     wanted = frozenset(pairs)
     if len(wanted) != len(pairs):
         raise TransferRejected(["moves must be different transfers"])
-    match = next((plan for plan in legal.values() if _pairs(plan) == wanted), None)
+    match = next((plan for plan in legal if _pairs(plan) == wanted), None)
     if match is None:
         raise TransferRejected(["moves must be one of the alternatives"])
     if not _allowed(match, policy, roll, free_transfers, absent):
@@ -690,7 +733,7 @@ def _brief(
 
 def _dossier(
     players: list[PlayerOpt],
-    plans: dict[int, SolvedPlan],
+    plans: Plans,
     policy: TransferSuggestion,
     notes: list[dict[str, Any]],
     team_names: dict[int, str],
@@ -711,8 +754,9 @@ def _dossier(
     legal = _candidate_plans(plans, free_transfers)
     alternatives = []
     target_ids: set[int] = set()
-    for count in sorted(legal):
-        plan = legal[count]
+    ordered = sorted(legal, key=lambda plan: (plan.transfers_in, -_net(plan, free_transfers)))
+    for plan in ordered:
+        count = plan.transfers_in
         if not _allowed(plan, policy, roll, free_transfers, absent):
             continue
         for move in plan.moves:
@@ -893,9 +937,90 @@ def stored_advice_ok(payload: dict[str, Any], squad_ids: set[int], free_transfer
     return kept <= placed_ids and set(ins) <= placed_ids
 
 
+def _solved_plans(solved: dict[str, Any]) -> list[SolvedPlan]:
+    alternatives = solved.get("alternatives")
+    if isinstance(alternatives, dict) and alternatives:
+        found: list[SolvedPlan] = []
+        for count in sorted(alternatives):
+            found.extend(alternatives[count])
+        if found:
+            return found
+    all_plans = solved.get("all") or []
+    if isinstance(all_plans, Mapping):
+        return [all_plans[key] for key in sorted(all_plans)]
+    return list(all_plans)
+
+
+def _fixture_side(
+    gameweek: int,
+    opponent: str,
+    fdr: int,
+    is_home: bool,
+    form: tuple[float, float] | None,
+) -> dict[str, Any]:
+    return {
+        "gameweek": gameweek,
+        "opponent": opponent,
+        "fdr": fdr,
+        "is_home": is_home,
+        "opponent_attack": None if form is None else round(form[0], 2),
+        "opponent_defence": None if form is None else round(form[1], 2),
+    }
+
+
+def fixture_run(
+    upcoming: list[dict[str, Any]],
+    ratings: pd.DataFrame,
+    gameweeks: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    """Next gameweeks for each club, with the opponent's attack and defence form."""
+    wanted = {int(gameweek) for gameweek in gameweeks}
+    form = team_form_percentiles(ratings)
+    by_team: dict[int, list[dict[str, Any]]] = {}
+    for row in upcoming:
+        event = row.get("event")
+        if event is None or int(event) not in wanted:
+            continue
+        gameweek = int(event)
+        home_id = int(row["team_h"])
+        away_id = int(row["team_a"])
+        by_team.setdefault(home_id, []).append(
+            _fixture_side(
+                gameweek,
+                str(row.get("away_short") or ""),
+                int(row["team_h_difficulty"]),
+                True,
+                form.get(away_id),
+            )
+        )
+        by_team.setdefault(away_id, []).append(
+            _fixture_side(
+                gameweek,
+                str(row.get("home_short") or ""),
+                int(row["team_a_difficulty"]),
+                False,
+                form.get(home_id),
+            )
+        )
+    for fixtures in by_team.values():
+        fixtures.sort(key=lambda item: (int(item["gameweek"]), str(item["opponent"])))
+    return by_team
+
+
+def advice_fixtures(
+    upcoming: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    played: list[dict[str, Any]],
+    players: list[dict[str, Any]],
+    gameweeks: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    ratings = team_form_ratings(pd.DataFrame(history), pd.DataFrame(played), pd.DataFrame(players))
+    return fixture_run(upcoming, ratings, gameweeks)
+
+
 def _accept(
     payload: dict[str, Any],
-    plans: dict[int, SolvedPlan],
+    plans: Plans,
     *,
     policy: TransferSuggestion,
     free_transfers: int,
@@ -932,10 +1057,11 @@ async def choose_transfers(
         free_transfers=available,
         horizon=PLAN_HORIZON,
         max_hits=0,
+        alternatives_per_count=3,
     )
-    plans: dict[int, SolvedPlan] = solved["all"]
+    plans = _solved_plans(solved)
     names = {player.id: player.web_name for player in players}
-    roll = plans.get(0)
+    roll = _roll_plan(plans)
     if roll is None:
         raise RuntimeError("Unable to solve the roll (0-transfer) plan")
     absent = unavailable_starter_ids(squad_notes, roll.xi_ids)
@@ -979,7 +1105,7 @@ async def choose_transfers(
 
 async def _from_model(
     client: OpenRouterClient,
-    plans: dict[int, SolvedPlan],
+    plans: Plans,
     policy: TransferSuggestion,
     dossier: dict[str, Any],
     *,

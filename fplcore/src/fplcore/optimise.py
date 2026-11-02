@@ -112,6 +112,20 @@ def _pair_transfers(
     return moves
 
 
+def _block_repeated_incomings(
+    prob: pulp.LpProblem,
+    incoming: dict[int, pulp.LpVariable],
+    players: list[PlayerOpt],
+    forbidden_incoming: list[frozenset[int]],
+) -> None:
+    present = {player.id for player in players}
+    for blocked in forbidden_incoming:
+        if not blocked or not blocked <= present:
+            continue
+        chosen = [incoming[player_id] for player_id in blocked]
+        prob += pulp.lpSum(chosen) <= len(blocked) - 1
+
+
 def solve_for_transfers(
     players: list[PlayerOpt],
     *,
@@ -122,6 +136,7 @@ def solve_for_transfers(
     delta: float,
     team_limit: int = 3,
     time_limit: int = 8,
+    forbidden_incoming: list[frozenset[int]] | None = None,
 ) -> SolvedPlan | None:
     by_id = {p.id: p for p in players}
     current = {p.id for p in players if p.in_squad}
@@ -175,6 +190,7 @@ def solve_for_transfers(
     for pos, maximum in SQUAD_MAX_PLAY.items():
         prob += pulp.lpSum(s[p.id] for p in players if p.position_id == pos) <= maximum
     prob += pulp.lpSum(c[p.id] for p in players) == 1
+    _block_repeated_incomings(prob, inn, players, forbidden_incoming or [])
 
     status = prob.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit, options=["ratio", "0.02"]))
     if pulp.LpStatus[status] not in {"Optimal", "Not Solved"}:
@@ -265,6 +281,41 @@ def pick_best_plan(
     return best, roll, fewer
 
 
+def _solve_alternatives(
+    players: list[PlayerOpt],
+    *,
+    bank: int,
+    free_transfers: int,
+    transfers_in_target: int,
+    horizon: int,
+    delta: float,
+    count: int,
+) -> list[SolvedPlan]:
+    found: list[SolvedPlan] = []
+    blocked: list[frozenset[int]] = []
+    attempts = 1 if transfers_in_target == 0 else max(1, count)
+    for _ in range(attempts):
+        solved = solve_for_transfers(
+            players,
+            bank=bank,
+            free_transfers=free_transfers,
+            transfers_in_target=transfers_in_target,
+            horizon=horizon,
+            delta=delta,
+            forbidden_incoming=blocked,
+        )
+        if solved is None:
+            break
+        incoming = frozenset(move.in_id for move in solved.moves)
+        if transfers_in_target > 0 and (len(incoming) != transfers_in_target or incoming in blocked):
+            break
+        found.append(solved)
+        if transfers_in_target == 0:
+            break
+        blocked.append(incoming)
+    return found
+
+
 def optimise_horizon(
     players: list[PlayerOpt],
     *,
@@ -275,6 +326,7 @@ def optimise_horizon(
     lock_ids: list[int] | None = None,
     exclude_ids: list[int] | None = None,
     unlimited_transfers: bool = False,
+    alternatives_per_count: int = 1,
 ) -> dict[str, Any]:
     settings = HORIZON_SETTINGS.get(horizon) or HorizonSettings(
         n=horizon, delta=0.85, hit_margin=1.0, roll_value=1.0, max_hits_default=1
@@ -298,17 +350,20 @@ def optimise_horizon(
     ft = 15 if unlimited_transfers else free_transfers
     max_in = 15 if unlimited_transfers else min(15, ft + hits_cap)
     plans: dict[int, SolvedPlan] = {}
+    alternatives: dict[int, list[SolvedPlan]] = {}
     for k in range(0, max_in + 1):
-        solved = solve_for_transfers(
+        found = _solve_alternatives(
             filtered,
             bank=bank,
             free_transfers=ft,
             transfers_in_target=k,
             horizon=settings.n,
             delta=settings.delta,
+            count=alternatives_per_count,
         )
-        if solved is not None:
-            plans[k] = solved
+        if found:
+            plans[k] = found[0]
+            alternatives[k] = found
     if 0 not in plans:
         raise RuntimeError("Unable to solve the roll (0-transfer) plan")
     best, roll, fewer = pick_best_plan(plans, free_transfers=ft, settings=settings, max_hits=hits_cap)
@@ -317,5 +372,6 @@ def optimise_horizon(
         "roll": roll,
         "fewer": fewer,
         "all": plans,
+        "alternatives": alternatives,
         "settings": settings,
     }

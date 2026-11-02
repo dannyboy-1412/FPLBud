@@ -137,11 +137,11 @@ All components are computed **per player, per upcoming GW k** (k = 1…6) and st
 | Metric | Raw formula | Score | Default weight |
 |---|---|---|---|
 | **Form** | `0.5 × float(form) + 0.5 × EWMA(total_points per appearance, last 5 rounds, α=0.5)` | percentile within position | **0.30** |
-| **Fixture difficulty** | for GW k: mean over that GW's fixtures of `ease = (5 − FDR)/4`, where FDR is `team_h_difficulty` if the player's team is home, else `team_a_difficulty` | `ease` (FDR 2→0.75, 3→0.5, 5→0) | **0.25** |
+| **Fixture difficulty** | for GW k: mean over that GW's fixtures of `ease = 0.5 × (5 − FDR)/4 + 0.5 × opponent form`. FDR is `team_h_difficulty` at home, else `team_a_difficulty`. Opponent form is that team's percentile for xG conceded (MID/FWD) or one minus its percentile for xG created (GKP/DEF), over the last 6 finished matches, shrunk to the league mean with a 3-match prior. With no finished matches the form half is dropped and ease is the FDR term alone | blended ease (still 0–1; FDR 2 alone is 0.75) | **0.25** |
 | **Home/away** | share of the player's fixtures in GW k that are at home | 1 = home, 0 = away, 0.5 for a split double | **0.10** |
 | **Expected stats** | `xp90 = 0.6 × recent90 + 0.4 × season90`, shrunk to the position mean: `(m·xp90 + 270·prior)/(m+270)` where m = minutes. Points-weighted: `goal_pts[pos]·xG + 3·xA` (goal points GKP/DEF 6, MID 5, FWD 4). For GKP/DEF, add `4·exp(−xGC90)` as a clean-sheet proxy (Poisson P(0 conceded)). | percentile within position | **0.35** |
 | **Value for money** | `points_per_game / (now_cost/10)` | percentile within position | **0.15** |
-| **Minutes security** | `start_rate = starts in last 6 team matches / 6`, multiplied by `mean(min(minutes,90)/90 when started)` | direct (0–1) | **0.15** |
+| **Minutes security** | EWMA of starts over the last 6 matches (α=0.4, newest weighs most), times `0.35 + 0.65 ×` the same weighted average of `min(minutes, 90) / 90` on those starts | direct (0–1). A 70-minute starter keeps about 0.85 | **0.15** |
 
 ### 4.2 Optional metric (off by default, weight 0; the UI suggests 0.15 when it is switched on)
 
@@ -180,6 +180,8 @@ s.t.  x_p = [p∈C] + in_p − out_p ;  in_p ≤ 1−[p∈C] ;  out_p ≤ [p∈C
 ```
 
 **Output:** separate solves with `Σ in_p` fixed at 0 (roll), 1, 2, …, up to F+H. Each comes back as a plan card showing projected gain against rolling, the transfers in and out with a per-metric breakdown (why), the captain and vice-captain (the next-best starter), and the remaining bank. About 700×6 variables solves with CBC in roughly 100–300 ms. Pre-filtering to the top 40 per position by S makes it even faster. Horizon-specific settings for the agent are in §6A.3, and chip advice is in §6A.4. If `active_chip` is wildcard or freehit, we treat F as unlimited.
+
+Suggested transfers (`POST /me/suggested-transfers`) call the same solver with `alternatives_per_count=3` and no hits. For each transfer count above zero, the next solve forbids the previous incoming set (`sum of those in_p ≤ size − 1`), so the options are different players rather than the same squad counted twice. The advice then shows the roll plus the two transfers with the best net value. A move is only the recommendation when it beats the value of keeping that free transfer. The language-model dossier, when the model is on, includes the next three gameweeks and each opponent's attack and defence form.
 
 ## 6. Team import logic (public team ID; no FPL login exists or is needed)
 

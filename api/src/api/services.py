@@ -72,6 +72,7 @@ from fplcore.stats.squad import (
 from fplcore.team_import import TeamSnapshot, build_snapshot, merged_from_payloads
 from fplcore.transfer_advice import (
     PLAN_HORIZON,
+    advice_fixtures,
     choose_transfers,
     stored_advice_ok,
     transfer_cache_hash,
@@ -762,6 +763,46 @@ def _squad_notes(squad_players: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return notes
 
 
+def _transfer_fixtures(conn: Connection, season_id: str, next_gw: int) -> dict[int, list[dict[str, Any]]]:
+    gameweeks = [next_gw + offset for offset in range(PLAN_HORIZON)]
+    history = [
+        dict(row)
+        for row in conn.execute(
+            """
+            select player_id, round, opponent_team, expected_goals
+              from player_gameweek_stats
+             where season_id = %s
+            """,
+            [season_id],
+        )
+    ]
+    played = [
+        dict(row)
+        for row in conn.execute(
+            """
+            select event, team_h, team_a, team_h_score, team_a_score, finished
+              from fixtures
+             where season_id = %s and finished
+            """,
+            [season_id],
+        )
+    ]
+    players = [
+        dict(row)
+        for row in conn.execute(
+            "select id, team_id from players where season_id = %s",
+            [season_id],
+        )
+    ]
+    return advice_fixtures(
+        stats_repo.fixtures_for(conn, season_id, gameweeks),
+        history,
+        played,
+        players,
+        gameweeks,
+    )
+
+
 def _transfer_opts(conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float]) -> list[PlayerOpt]:
     loaded = {player.id: player for player in load_opt_players(conn, snapshot, weights, horizon=PLAN_HORIZON)}
     for player in snapshot.squad_players:
@@ -868,7 +909,7 @@ async def build_suggested_transfers(conn: Connection, settings: Settings, user_i
             free_transfers=int(snapshot.free_transfers),
             squad_notes=_squad_notes(snapshot.squad_players),
             team_names={team.id: team.short_name for team in bootstrap.teams},
-            fixtures_by_team=stats_repo.next_event_fixtures(conn),
+            fixtures_by_team=_transfer_fixtures(conn, snapshot.season_id, gameweek) if allow_llm else {},
             settings=settings,
             allow_llm=allow_llm,
         )

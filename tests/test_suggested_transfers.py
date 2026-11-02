@@ -107,7 +107,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch, squad: list[dict]) -> dict:
     monkeypatch.setattr(services, "current_season_id", lambda conn: "2026/27")
     monkeypatch.setattr(services, "_transfer_opts", lambda conn, snapshot, weights: [])
     monkeypatch.setattr(services.stats_repo, "next_gw_id", lambda conn, season_id: 12)
-    monkeypatch.setattr(services.stats_repo, "next_event_fixtures", lambda conn: {})
+    monkeypatch.setattr(services, "_transfer_fixtures", lambda conn, season_id, next_gw: {})
     monkeypatch.setattr(services, "get_suggested_transfers", get)
     monkeypatch.setattr(services, "save_suggested_transfers", save)
     monkeypatch.setattr(services, "choose_transfers", choose)

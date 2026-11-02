@@ -1,14 +1,16 @@
 import json
 
+import pandas as pd
 import pytest
 
 from fplcore.llm import LlmError
-from fplcore.optimise import SolvedPlan, TransferMove
+from fplcore.optimise import PlayerOpt, SolvedPlan, TransferMove
 from fplcore.settings import Settings
 from fplcore.transfer_advice import (
     advice_from_model,
     advice_from_plans,
     choose_transfers,
+    fixture_run,
     option_cost,
     stored_advice_ok,
     transfer_cache_hash,
@@ -273,6 +275,74 @@ def test_model_reasons_drop_citations() -> None:
     assert "Wright has not played" in chosen["reason"]
 
 
+def test_one_free_transfer_shows_the_roll_and_two_moves() -> None:
+    plans = [
+        _plan(0, 10),
+        _plan(1, 14, [_move(1, 99, "Manzambi", "Ayari")]),
+        _plan(1, 13, [_move(1, 98, "Manzambi", "Rogers")]),
+        _plan(1, 11, [_move(2, 97, "Silva", "Mitchell")]),
+    ]
+    advice = _advise(plans, 1)
+    transfers = [option for option in advice.options if option["action"] == "transfer"]
+    rolls = [option for option in advice.options if option["action"] == "roll"]
+    assert len(rolls) == 1
+    assert len(transfers) == 2
+    assert sum(option["recommended_pct"] for option in advice.options) == 100
+    incoming = {move["in_id"] for option in transfers for move in option["moves"]}
+    assert incoming == {99, 98}
+
+
+def test_a_marginal_move_gives_the_roll_the_largest_share() -> None:
+    advice = _advise({0: _plan(0, 10), 1: _plan(1, 12.4, [_move(1, 99)])}, 1)
+    shares = [option["recommended_pct"] for option in advice.options]
+    roll = next(option for option in advice.options if option["action"] == "roll")
+    assert roll["recommended_pct"] == max(shares)
+    assert roll["chosen"] is True
+
+
+def test_selling_manzambi_for_a_small_gain_rolls() -> None:
+    advice = _advise(
+        {
+            0: _plan(0, 30),
+            1: _plan(1, 32.3, [_move(1, 99, "Manzambi", "Ayari")]),
+        },
+        1,
+        names={1: "Manzambi", 99: "Ayari"},
+    )
+    assert advice.action == "roll"
+    chosen = next(option for option in advice.options if option["chosen"])
+    assert chosen["action"] == "roll"
+    assert chosen["recommended_pct"] > 50
+    assert any(option["action"] == "transfer" for option in advice.options)
+
+
+def test_fixture_run_lists_three_gameweeks_and_a_leaky_opponent() -> None:
+    upcoming = [
+        {
+            "event": event,
+            "team_h": opponent,
+            "team_a": 1,
+            "team_h_difficulty": 3,
+            "team_a_difficulty": fdr,
+            "home_short": "OPP",
+            "away_short": "AVL",
+        }
+        for event, opponent, fdr in ((10, 2, 4), (11, 3, 2), (12, 4, 2))
+    ]
+    ratings = pd.DataFrame(
+        [
+            {"team_id": 2, "xg_for": 0.4, "xg_against": 2.0, "matches": 6},
+            {"team_id": 3, "xg_for": 1.2, "xg_against": 1.0, "matches": 6},
+            {"team_id": 4, "xg_for": 1.5, "xg_against": 0.8, "matches": 6},
+        ]
+    )
+    run = fixture_run(upcoming, ratings, [10, 11, 12])
+    assert [row["gameweek"] for row in run[1]] == [10, 11, 12]
+    assert run[1][0]["fdr"] == 4
+    assert run[1][0]["is_home"] is False
+    assert run[1][0]["opponent_defence"] == 1.0
+
+
 def test_a_clear_transfer_is_the_majority_recommendation() -> None:
     advice = _advise({0: _plan(0, 10), 1: _plan(1, 13, [_move(1, 99, "Watkins", "Haaland")])}, 1)
     transfer = next(option for option in advice.options if option["chosen"])
@@ -312,6 +382,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[int, SolvedPlan]:
         assert kwargs["horizon"] == 3
         assert kwargs["max_hits"] == 0
         assert kwargs["free_transfers"] == 1
+        assert kwargs["alternatives_per_count"] == 3
         return {"all": plans}
 
     monkeypatch.setattr("fplcore.transfer_advice.optimise_horizon", solve)
@@ -320,6 +391,47 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[int, SolvedPlan]:
 
 def _settings() -> Settings:
     return Settings(llm_enabled=False, llm_api_key="test-key", llm_model="test/model", llm_daily_call_cap=200)
+
+
+async def test_the_model_sees_the_next_three_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:
+    def solve(*args: object, **kwargs: object) -> dict:
+        return {"all": {0: _plan(0, 10), 1: _plan(1, 13, [_move(1, 99, "Manzambi", "Ayari")])}}
+
+    monkeypatch.setattr("fplcore.transfer_advice.optimise_horizon", solve)
+    player = PlayerOpt(
+        id=1,
+        web_name="Manzambi",
+        team_id=1,
+        position_id=3,
+        cost=61,
+        sell=61,
+        in_squad=True,
+        can_in=False,
+        locked=False,
+        proj=[4.0, 4.0, 4.0],
+        scores_gw1={},
+    )
+    model = _Model({"action": "roll", "moves": [], "summary": "Roll."})
+    await choose_transfers(
+        [player],
+        bank=10,
+        free_transfers=1,
+        squad_notes=[{"id": 1, "status": "a", "chance_of_playing_next_round": 100, "news": "", "minutes": 400}],
+        team_names={1: "AVL"},
+        fixtures_by_team={
+            1: [
+                {"gameweek": 10, "opponent": "MUN", "fdr": 4, "is_home": False, "opponent_attack": 0.2, "opponent_defence": 0.9},
+                {"gameweek": 11, "opponent": "SUN", "fdr": 2, "is_home": True, "opponent_attack": 0.4, "opponent_defence": 0.5},
+                {"gameweek": 12, "opponent": "IPS", "fdr": 2, "is_home": False, "opponent_attack": 0.3, "opponent_defence": 0.7},
+            ]
+        },
+        settings=_settings(),
+        allow_llm=True,
+        client=model,
+    )
+    fixtures = json.loads(model.user)["squad"][0]["fixtures"]
+    assert [row["gameweek"] for row in fixtures] == [10, 11, 12]
+    assert fixtures[0]["opponent_defence"] == 0.9
 
 
 async def test_rules_decide_when_the_model_is_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:

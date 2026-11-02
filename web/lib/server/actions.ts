@@ -193,6 +193,19 @@ export async function deleteChatMemory(formData: FormData): Promise<void> {
   refresh();
 }
 
+export async function deleteChatThread(threadId: string): Promise<{ error?: string }> {
+  const token = await getAccessToken();
+  if (!token) return { error: "Sign in required." };
+  try {
+    await api(`/chat/threads/${encodeURIComponent(threadId)}`, { method: "DELETE", token });
+    refresh();
+    return {};
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Could not delete that chat." };
+  }
+}
+
 export async function deleteChatHistory(): Promise<{ error?: string }> {
   const token = await getAccessToken();
   if (!token) return { error: "Sign in required." };

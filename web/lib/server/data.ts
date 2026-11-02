@@ -14,6 +14,14 @@ import {
   type PublicTeam,
   type SquadStats,
 } from "@/lib/api";
+import {
+  messageFrom,
+  threadFrom,
+  usageFrom,
+  type ChatUsage,
+  type StoredMessage,
+  type StoredThread,
+} from "@/lib/chat";
 import { getAccessToken } from "@/lib/server/session";
 
 async function getMeta(): Promise<Meta> {
@@ -129,4 +137,73 @@ export const getInsights = cache(async (position?: number): Promise<InsightsStat
   const query = q.toString();
   return api<InsightsStats>(query ? `/stats/insights?${query}` : "/stats/insights", { token });
 });
+
+export type ChatListResult =
+  | { status: "ok"; threads: StoredThread[] }
+  | { status: "disabled" }
+  | { status: "error"; message: string };
+
+export type ChatThreadResult =
+  | { status: "ok"; thread: StoredThread; messages: StoredMessage[] }
+  | { status: "missing" }
+  | { status: "disabled" }
+  | { status: "error"; message: string };
+
+export async function getChatThreads(): Promise<ChatListResult> {
+  const token = await getAccessToken();
+  if (!token) return { status: "error", message: "Sign in required." };
+  try {
+    const body = await api<{ threads: unknown }>("/chat/threads", { token });
+    const threads = Array.isArray(body.threads) ? body.threads.flatMap((row) => {
+      const thread = threadFrom(row);
+      return thread ? [thread] : [];
+    }) : [];
+    return { status: "ok", threads };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return { status: "ok", threads: [] };
+    return chatFailure(err, "The notebook could not be loaded.");
+  }
+}
+
+export async function getChatThread(id: string): Promise<ChatThreadResult> {
+  const token = await getAccessToken();
+  if (!token) return { status: "error", message: "Sign in required." };
+  try {
+    const body = await api<{ thread: unknown; messages: unknown }>(
+      `/chat/threads/${encodeURIComponent(id)}`,
+      { token },
+    );
+    const thread = threadFrom(body.thread);
+    if (!thread) return { status: "error", message: "That conversation could not be read." };
+    const messages = Array.isArray(body.messages)
+      ? body.messages.flatMap((row) => {
+          const message = messageFrom(row);
+          return message ? [message] : [];
+        })
+      : [];
+    return { status: "ok", thread, messages };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return { status: "missing" };
+    const failed = chatFailure(err, "That conversation could not be loaded.");
+    if (failed.status === "disabled") return failed;
+    return failed;
+  }
+}
+
+export async function getChatUsage(): Promise<ChatUsage | null> {
+  const token = await getAccessToken();
+  if (!token) return null;
+  try {
+    return usageFrom(await api<unknown>("/chat/usage", { token }));
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 503)) return null;
+    return null;
+  }
+}
+
+function chatFailure(err: unknown, fallback: string): { status: "disabled" } | { status: "error"; message: string } {
+  if (err instanceof ApiError && err.status === 503) return { status: "disabled" };
+  if (err instanceof ApiError && err.status === 404) return { status: "error", message: fallback };
+  return { status: "error", message: fallback };
+}
 

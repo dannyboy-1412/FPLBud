@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, Trash, X } from "@phosphor-icons/react";
-import { shortWhen, threadBucket, type ThreadBucket } from "@/components/chat/stamps";
+import { NotePencil, SidebarSimple, Trash, X } from "@phosphor-icons/react";
+import { threadBucket, type ThreadBucket } from "@/components/chat/stamps";
 import type { StoredThread } from "@/lib/chat";
 import { deleteChatThread } from "@/lib/server/actions";
 
@@ -17,18 +17,27 @@ export function ThreadRail({
   threads,
   activeId,
   open,
+  drawer,
+  collapsed,
+  canStart,
   onClose,
+  onToggle,
   onNew,
   onDeleted,
 }: {
   threads: StoredThread[];
   activeId: string | null;
   open: boolean;
+  drawer: boolean;
+  collapsed: boolean;
+  canStart: boolean;
   onClose: () => void;
+  onToggle: () => void;
   onNew: () => void;
   onDeleted: (id: string) => void;
 }) {
   const newRef = useRef<HTMLButtonElement>(null);
+  const [shortcut, setShortcut] = useState("Ctrl+Shift+O");
   const grouped = GROUPS.map((group) => ({
     ...group,
     threads: threads.filter((thread) => threadBucket(thread.updated_at) === group.id),
@@ -38,38 +47,70 @@ export function ThreadRail({
     if (open) newRef.current?.focus();
   }, [open]);
 
+  useEffect(() => {
+    const apple = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    setShortcut(apple ? "⌘⇧O" : "Ctrl+Shift+O");
+  }, []);
+
+  const className = ["chat-rail", open ? "is-open" : "", collapsed ? "is-collapsed" : ""].filter(Boolean).join(" ");
+
   return (
-    <aside id="chat-notebook" className={open ? "chat-rail is-open" : "chat-rail"} aria-label="Past questions">
+    <aside id="chat-notebook" className={className} aria-label="Chats">
       <div className="chat-rail-head">
-        <p className="kicker">Notebook</p>
-        <button type="button" className="chat-rail-close" onClick={onClose}>
-          <X size={16} weight="bold" />
-          Close
-        </button>
+        {collapsed ? null : <p className="chat-rail-label">Chats</p>}
+        {drawer ? (
+          <button type="button" className="chat-rail-close" onClick={onClose}>
+            <X size={16} weight="bold" />
+            Close
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="chat-rail-toggle"
+            aria-label={collapsed ? "Expand chats" : "Collapse chats"}
+            onClick={onToggle}
+          >
+            <SidebarSimple size={18} />
+          </button>
+        )}
       </div>
-      <button ref={newRef} type="button" className="chat-new" onClick={onNew}>
-        <Plus size={16} weight="bold" />
-        New question
+      <button
+        ref={newRef}
+        type="button"
+        className="chat-new"
+        onClick={onNew}
+        disabled={!canStart}
+        aria-label="New chat"
+        title="New chat"
+      >
+        <NotePencil size={18} weight="bold" />
+        {collapsed ? null : (
+          <>
+            <span>New chat</span>
+            <kbd>{shortcut}</kbd>
+          </>
+        )}
       </button>
-      <div className="chat-rail-list">
-        {grouped.length === 0 ? <p className="chat-rail-empty">No past questions yet.</p> : null}
-        {grouped.map((group) => (
-          <section key={group.id} aria-label={group.label}>
-            <h2 className="kicker chat-group-label">{group.label}</h2>
-            <ul>
-              {group.threads.map((thread) => (
-                <ThreadRow
-                  key={thread.id}
-                  thread={thread}
-                  active={thread.id === activeId}
-                  onClose={onClose}
-                  onDeleted={onDeleted}
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+      {collapsed ? null : (
+        <div className="chat-rail-list">
+          {grouped.map((group) => (
+            <section key={group.id} aria-label={group.label}>
+              <h2 className="chat-group-label">{group.label}</h2>
+              <ul>
+                {group.threads.map((thread) => (
+                  <ThreadRow
+                    key={thread.id}
+                    thread={thread}
+                    active={thread.id === activeId}
+                    onClose={onClose}
+                    onDeleted={onDeleted}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </aside>
   );
 }
@@ -89,7 +130,6 @@ function ThreadRow({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const title = thread.title?.trim() || "Untitled";
-  const when = shortWhen(thread.updated_at);
 
   if (confirming) {
     return (
@@ -116,11 +156,11 @@ function ThreadRow({
     <li className={active ? "chat-thread is-active" : "chat-thread"}>
       {active ? (
         <span className="chat-thread-link" aria-current="page">
-          <ThreadTitle title={title} when={when} />
+          <span className="chat-thread-title">{title}</span>
         </span>
       ) : (
         <Link href={`/chat?t=${thread.id}`} className="chat-thread-link" onClick={onClose}>
-          <ThreadTitle title={title} when={when} />
+          <span className="chat-thread-title">{title}</span>
         </Link>
       )}
       <button
@@ -147,13 +187,4 @@ function ThreadRow({
     }
     onDeleted(thread.id);
   }
-}
-
-function ThreadTitle({ title, when }: { title: string; when: string }) {
-  return (
-    <>
-      <span className="chat-thread-title">{title}</span>
-      {when ? <span className="chat-thread-when">{when}</span> : null}
-    </>
-  );
 }

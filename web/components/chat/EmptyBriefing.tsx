@@ -1,52 +1,98 @@
 "use client";
 
-import { ArrowsLeftRight, CalendarBlank, Crown, Ticket } from "@phosphor-icons/react";
-import { DeadlineClock } from "@/components/programme/DeadlineClock";
-import { londonStamp } from "@/components/chat/stamps";
+import { Suspense, use } from "react";
+import { ArrowsLeftRight, CalendarBlank, Crown, FirstAid, Ticket } from "@phosphor-icons/react";
+import {
+  GENERIC_PROMPTS,
+  greetingName,
+  squadPrompts,
+  statusLine,
+  type BriefingEvent,
+  type BriefingSquad,
+  type SquadPrompt,
+} from "@/components/chat/briefing";
 
-const PROMPTS = [
-  { kicker: "Captaincy", question: "Who should I captain?", icon: Crown },
-  { kicker: "Transfers", question: "Is a hit worth it?", icon: ArrowsLeftRight },
-  { kicker: "Chips", question: "Should I use a chip this week?", icon: Ticket },
-  { kicker: "Fixtures", question: "Which of my players have the best fixtures?", icon: CalendarBlank },
-] as const;
+const ICONS = {
+  captain: Crown,
+  fitness: FirstAid,
+  transfer: ArrowsLeftRight,
+  chip: Ticket,
+  fixtures: CalendarBlank,
+} as const;
 
 export function EmptyBriefing({
+  teamPromise,
   event,
   missing,
-  onAsk,
 }: {
-  event: { id: number; name: string; deadline_time: string } | null;
+  teamPromise: Promise<BriefingSquad | null>;
+  event: BriefingEvent;
   missing: boolean;
-  onAsk: (question: string) => void;
 }) {
   return (
     <section className="chat-brief">
-      {missing ? <p className="chat-missing">That conversation isn&apos;t in the notebook.</p> : null}
-      <p className="kicker">Today&apos;s briefing</p>
-      <h2 className="chat-brief-title">{event ? `Gameweek ${event.id}` : "The desk is open"}</h2>
-      {event ? (
-        <p className="chat-brief-deadline">
-          <span>Deadline {londonStamp(event.deadline_time)}</span>
-          <DeadlineClock iso={event.deadline_time} />
-        </p>
-      ) : (
-        <p className="chat-brief-deadline">Ask about your squad, a player, or the deadline.</p>
-      )}
-      <div className="chat-prompts">
-        {PROMPTS.map((prompt) => {
-          const Icon = prompt.icon;
-          return (
-            <button key={prompt.kicker} type="button" className="chat-prompt" onClick={() => onAsk(prompt.question)}>
-              <span className="chat-prompt-kicker">
-                <Icon size={16} weight="bold" />
-                <span className="kicker">{prompt.kicker}</span>
-              </span>
-              <span className="chat-prompt-q">{prompt.question}</span>
-            </button>
-          );
-        })}
-      </div>
+      {missing ? <p className="chat-missing">That chat isn&apos;t here.</p> : null}
+      <Suspense fallback={<Greeting team={null} event={event} />}>
+        <ResolvedGreeting teamPromise={teamPromise} event={event} />
+      </Suspense>
     </section>
+  );
+}
+
+export function PromptChips({
+  teamPromise,
+  onAsk,
+}: {
+  teamPromise: Promise<BriefingSquad | null>;
+  onAsk: (question: string) => void;
+}) {
+  return (
+    <Suspense fallback={<PromptRow prompts={GENERIC_PROMPTS} onAsk={onAsk} />}>
+      <ResolvedPrompts teamPromise={teamPromise} onAsk={onAsk} />
+    </Suspense>
+  );
+}
+
+function ResolvedGreeting({ teamPromise, event }: { teamPromise: Promise<BriefingSquad | null>; event: BriefingEvent }) {
+  return <Greeting team={use(teamPromise)} event={event} />;
+}
+
+function Greeting({ team, event }: { team: BriefingSquad | null; event: BriefingEvent }) {
+  const now = new Date();
+  return (
+    <>
+      <h2 className="chat-brief-title" suppressHydrationWarning>
+        {greetingName(team, event, now)}
+      </h2>
+      <p className="chat-brief-deadline" suppressHydrationWarning>
+        {statusLine(team, event, now)}
+      </p>
+    </>
+  );
+}
+
+function ResolvedPrompts({
+  teamPromise,
+  onAsk,
+}: {
+  teamPromise: Promise<BriefingSquad | null>;
+  onAsk: (question: string) => void;
+}) {
+  return <PromptRow prompts={squadPrompts(use(teamPromise))} onAsk={onAsk} />;
+}
+
+function PromptRow({ prompts, onAsk }: { prompts: SquadPrompt[]; onAsk: (question: string) => void }) {
+  return (
+    <div className="chat-prompts">
+      {prompts.map((prompt) => {
+        const Icon = ICONS[prompt.icon];
+        return (
+          <button key={`${prompt.icon}-${prompt.question}`} type="button" className="chat-prompt" onClick={() => onAsk(prompt.question)}>
+            <Icon size={16} weight="bold" />
+            {prompt.question}
+          </button>
+        );
+      })}
+    </div>
   );
 }

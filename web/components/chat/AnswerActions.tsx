@@ -1,29 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Books, Check, Copy, ThumbsDown, ThumbsUp } from "@phosphor-icons/react";
-import { SourcesLedger } from "@/components/chat/SourcesLedger";
-import { plainChatText, type ToolUse } from "@/lib/chat";
+import { Check, Copy, ThumbsDown, ThumbsUp } from "@phosphor-icons/react";
+import { plainChatText } from "@/lib/chat";
 import { sendChatFeedback } from "@/lib/server/actions";
 
 export function AnswerActions({
   text,
   messageId,
   feedback,
-  tools,
 }: {
   text: string;
   messageId: number | null;
   feedback: 1 | -1 | null;
-  tools: ToolUse[];
 }) {
   const [copied, setCopied] = useState(false);
   const [vote, setVote] = useState<"up" | "down" | null>(feedback === 1 ? "up" : feedback === -1 ? "down" : null);
-  const [sources, setSources] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className={sources ? "chat-actions is-open" : "chat-actions"}>
+    <div className="chat-actions">
       <div className="chat-action-row">
         <button type="button" className="chat-icon-btn" aria-label={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
           {copied ? <Check size={16} weight="bold" /> : <Copy size={16} />}
@@ -50,24 +46,12 @@ export function AnswerActions({
             </button>
           </>
         ) : null}
-        {tools.length > 0 ? (
-          <button
-            type="button"
-            className="chat-icon-btn"
-            aria-label="Sources"
-            aria-expanded={sources}
-            onClick={() => setSources((open) => !open)}
-          >
-            <Books size={16} weight={sources ? "fill" : "regular"} />
-          </button>
-        ) : null}
       </div>
       {error ? (
         <p className="text-vermilion-ink" role="alert">
           {error}
         </p>
       ) : null}
-      {sources ? <SourcesLedger tools={tools} /> : null}
     </div>
   );
 

@@ -10,7 +10,6 @@ export function SourcesLedger({ tools }: { tools: ToolUse[] }) {
   if (tools.length === 0) return null;
   return (
     <div className="chat-ledger">
-      <p className="kicker">Sources</p>
       <ul>
         {tools.map((tool) => (
           <li key={`${tool.name}-${tool.args_brief}`}>

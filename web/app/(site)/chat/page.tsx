@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { ChatWorkspace } from "@/components/chat/ChatWorkspace";
-import { getChatThread, getChatThreads, getChatUsage, loadMeta } from "@/lib/server/data";
+import { getChatThread, getChatThreads, getChatUsage, getMyTeam, loadMeta } from "@/lib/server/data";
 
 export default function ChatPage({ searchParams }: PageProps<"/chat">) {
   return (
@@ -13,6 +13,7 @@ export default function ChatPage({ searchParams }: PageProps<"/chat">) {
 async function ChatLoader({ searchParams }: { searchParams: PageProps<"/chat">["searchParams"] }) {
   const params = await searchParams;
   const requested = firstParam(params.t);
+  const teamPromise = getMyTeam().catch(() => null);
   const [threadsResult, usage, threadResult, meta] = await Promise.all([
     getChatThreads(),
     getChatUsage(),
@@ -44,6 +45,7 @@ async function ChatLoader({ searchParams }: { searchParams: PageProps<"/chat">["
       usage={usage}
       event={event}
       missing={threadResult?.status === "missing"}
+      teamPromise={teamPromise}
     />
   );
 }

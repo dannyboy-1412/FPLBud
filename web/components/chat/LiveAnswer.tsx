@@ -1,4 +1,4 @@
-import { DeskByline, WorkSteps } from "@/components/chat/AssistantAnswer";
+import { DeskByline, LiveStep } from "@/components/chat/AssistantAnswer";
 import { SafeMarkdown } from "@/components/chat/SafeMarkdown";
 import type { LiveTurn } from "@/lib/chat";
 
@@ -16,9 +16,9 @@ export function LiveAnswer({
   const caret = busy ? <span className="chat-caret" aria-hidden /> : null;
 
   return (
-    <article className="chat-answer is-live" aria-busy={busy}>
+    <article className="chat-answer is-live chat-arrive" aria-busy={busy}>
       <DeskByline createdAt={null} />
-      <WorkSteps steps={steps} />
+      {live.draft ? null : <LiveStep steps={steps} />}
       {live.draft ? <SafeMarkdown text={live.draft} citations={[]} trailing={caret} /> : null}
       {live.error ? (
         <div className="chat-error" role="alert">

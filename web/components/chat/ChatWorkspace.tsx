@@ -4,7 +4,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Composer } from "@/components/chat/Composer";
 import { Conversation } from "@/components/chat/Conversation";
+import { PromptChips } from "@/components/chat/EmptyBriefing";
 import { ThreadRail } from "@/components/chat/ThreadRail";
+import type { BriefingSquad } from "@/components/chat/briefing";
 import {
   emptyTurn,
   plainChatText,
@@ -18,6 +20,8 @@ import {
   type StoredThread,
 } from "@/lib/chat";
 
+const RAIL_KEY = "fplbud.chat.rail";
+
 type BriefingEvent = { id: number; name: string; deadline_time: string };
 
 export function ChatWorkspace({
@@ -27,6 +31,7 @@ export function ChatWorkspace({
   usage,
   event,
   missing,
+  teamPromise,
 }: {
   threads: StoredThread[];
   thread: StoredThread | null;
@@ -34,6 +39,7 @@ export function ChatWorkspace({
   usage: ChatUsage | null;
   event: BriefingEvent | null;
   missing: boolean;
+  teamPromise: Promise<BriefingSquad | null>;
 }) {
   const router = useRouter();
   const [notebook, setNotebook] = useState(threads);
@@ -44,6 +50,7 @@ export function ChatWorkspace({
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [fresh, setFresh] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -61,6 +68,10 @@ export function ChatWorkspace({
     const page = document.querySelector(".page");
     page?.classList.add("page--app");
     return () => page?.classList.remove("page--app");
+  }, []);
+
+  useLayoutEffect(() => {
+    setCollapsed(window.localStorage.getItem(RAIL_KEY) === "collapsed");
   }, []);
 
   useEffect(() => {
@@ -249,6 +260,14 @@ export function ChatWorkspace({
     document.getElementById("chat-open-notebook")?.focus();
   }
 
+  function toggleRail() {
+    setCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem(RAIL_KEY, next ? "collapsed" : "open");
+      return next;
+    });
+  }
+
   function onDeleted(id: string) {
     setNotebook((current) => current.filter((item) => item.id !== id));
     if (id === threadId) startFresh();
@@ -256,50 +275,66 @@ export function ChatWorkspace({
   }
 
   const asked = bubbles.find((message) => message.role === "user")?.text.trim().slice(0, 60);
-  const title = notebook.find((item) => item.id === threadId)?.title?.trim() || asked || "New question";
+  const title = notebook.find((item) => item.id === threadId)?.title?.trim() || asked || "New chat";
   const turnsLeft = live.turnsLeft ?? usage?.turns_left ?? null;
+  const showLive = busy || Boolean(live.draft) || Boolean(live.error);
+  const empty = bubbles.length === 0 && !showLive;
+  const showRail = notebook.length > 0;
+  const railCollapsed = showRail && collapsed && !narrow;
+  const workspaceClass = ["chat-workspace", showRail ? "has-rail" : "", railCollapsed ? "is-collapsed" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="chat-workspace">
+    <div className={workspaceClass}>
       {narrow && drawer ? (
-        <button type="button" className="chat-backdrop" aria-label="Close notebook" onClick={() => setDrawer(false)} />
+        <button type="button" className="chat-backdrop" aria-label="Close chats" onClick={() => setDrawer(false)} />
       ) : null}
-      <div
-        className="chat-rail-slot"
-        inert={narrow && !drawer ? true : undefined}
-        aria-hidden={narrow && !drawer ? true : undefined}
-      >
-        <ThreadRail
-          threads={notebook}
-          activeId={threadId}
-          open={drawer}
-          onClose={closeDrawer}
-          onNew={startFresh}
-          onDeleted={onDeleted}
-        />
-      </div>
-      <div className="chat-stage" inert={narrow && drawer ? true : undefined}>
+      {showRail ? (
+        <div
+          className="chat-rail-slot"
+          inert={narrow && !drawer ? true : undefined}
+          aria-hidden={narrow && !drawer ? true : undefined}
+        >
+          <ThreadRail
+            threads={notebook}
+            activeId={threadId}
+            open={drawer}
+            drawer={narrow}
+            collapsed={railCollapsed}
+            canStart={threadId != null || bubbles.length > 0}
+            onClose={closeDrawer}
+            onToggle={toggleRail}
+            onNew={startFresh}
+            onDeleted={onDeleted}
+          />
+        </div>
+      ) : null}
+      <div className={empty ? "chat-stage is-empty" : "chat-stage"} inert={narrow && drawer ? true : undefined}>
         <Conversation
           title={title}
           bubbles={bubbles}
           live={live}
           busy={busy}
-          turnsLeft={turnsLeft}
-          dailyCap={usage?.daily_cap ?? null}
           event={event}
           missing={missing && !fresh}
-          onAsk={(question) => void ask(question)}
+          teamPromise={teamPromise}
           onRetry={retry}
-          onOpenNotebook={() => setDrawer(true)}
+          onOpenNotebook={narrow && showRail ? () => setDrawer(true) : null}
+          onExpand={railCollapsed ? toggleRail : null}
         />
         <Composer
           inputRef={composerRef}
           value={draft}
           busy={busy}
+          turnsLeft={turnsLeft}
+          event={event}
+          teamPromise={teamPromise}
           onChange={setDraft}
           onSend={() => void ask(draft)}
           onStop={stop}
         />
+        {empty ? <PromptChips teamPromise={teamPromise} onAsk={(question) => void ask(question)} /> : null}
       </div>
       <div className="sr-only" aria-live="polite">
         {announcement}

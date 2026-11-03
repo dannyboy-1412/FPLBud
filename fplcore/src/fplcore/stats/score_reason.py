@@ -13,6 +13,7 @@ SQUAD_SCORE_SYSTEM = (
     "You explain an FPL squad score in one or two short sentences. "
     "The score is out of 10 for this gameweek's starting XI. "
     "The highest projection is counted twice, the way a captain scores. "
+    "Mention one reason from added. When short_of_10 is not empty, also say why it is not a 10. "
     "Use only the names and numbers in the JSON. Do not invent players, injuries, fixtures, or prices. "
     'Return JSON {"reason": "..."}.'
 )
@@ -38,6 +39,8 @@ def squad_score_dossier(scored: SquadScore) -> dict[str, Any]:
     return {
         "score": scored.value,
         "basis": scored.reason,
+        "added": list(scored.notes.added),
+        "short_of_10": list(scored.notes.short_of_10),
         "starters": [
             {
                 "name": starter.name,

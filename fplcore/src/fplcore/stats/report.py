@@ -112,21 +112,35 @@ class StarterOutlook:
 
 
 @dataclass(frozen=True)
+class SquadScoreNotes:
+    """The two lists under the score: what added points, and why it is not a 10."""
+
+    added: tuple[str, ...] = ()
+    short_of_10: tuple[str, ...] = ()
+
+    def payload(self) -> dict[str, list[str]]:
+        return {"added": list(self.added), "short_of_10": list(self.short_of_10)}
+
+
+@dataclass(frozen=True)
 class SquadScore:
     """A squad score out of 10, the facts behind it, and a sentence if no model is called."""
 
     value: float
     reason: str
     starters: tuple[StarterOutlook, ...] = ()
+    notes: SquadScoreNotes = SquadScoreNotes()
 
 
 def explain_squad_score(starters: list[StarterOutlook], field: list[float]) -> SquadScore:
-    """Score an XI out of 10 and say what pushed it there."""
+    """Score an XI out of 10 and list what added points and what kept it under 10."""
     value = squad_score_for_xi([starter.projection for starter in starters], field)
+    notes = _score_notes(starters, field, value)
     return SquadScore(
         value=value,
-        reason=_squad_score_reason(starters, field, value),
+        reason=_squad_score_reason(field, value, notes),
         starters=tuple(starters),
+        notes=notes,
     )
 
 
@@ -173,7 +187,11 @@ def _playing_field(field: list[float]) -> list[float]:
     return [float(value) for value in field if float(value) > 0]
 
 
-def _squad_score_reason(starters: list[StarterOutlook], field: list[float], score: float) -> str:
+_SHORT_OF_BEST = "The XI is short of the best projections this week."
+_ABOVE_ORDINARY = "The XI projects above an ordinary side."
+
+
+def _squad_score_reason(field: list[float], score: float, notes: SquadScoreNotes) -> str:
     playing = _playing_field(field)
     if len(playing) < 2:
         return "Not enough players have a fixture to place this XI."
@@ -183,10 +201,138 @@ def _squad_score_reason(starters: list[StarterOutlook], field: list[float], scor
         if score > 0:
             return "Players with a fixture all project the same, so the XI sits in the middle."
         return "The starting XI has nothing projected this week."
-    detail = _score_detail(starters, playing, score)
-    if not detail:
+    lines = [*notes.added, *notes.short_of_10]
+    if not lines:
         return _score_band(score)
-    return f"{_score_band(score)} {detail}"
+    return f"{_score_band(score)} {' '.join(lines)}"
+
+
+def _score_notes(
+    starters: list[StarterOutlook],
+    field: list[float],
+    score: float,
+) -> SquadScoreNotes:
+    playing = _playing_field(field)
+    if len(playing) < 2:
+        return SquadScoreNotes()
+    low = _percentile(playing, SQUAD_SCORE_LOW_PERCENTILE)
+    high = _percentile(playing, SQUAD_SCORE_HIGH_PERCENTILE)
+    if high <= low:
+        return SquadScoreNotes()
+    added = _added_lines(starters, playing) if score > 0 else ()
+    short = _short_lines(starters, playing) if score < 10 else ()
+    return SquadScoreNotes(added=tuple(added), short_of_10=tuple(short))
+
+
+def _added_lines(starters: list[StarterOutlook], playing: list[float]) -> list[str]:
+    standout = _standout(starters, playing)
+    contributors = _contributors(starters)
+    high = _percentile(playing, SQUAD_SCORE_HIGH_PERCENTILE)
+    median = _percentile(playing, _MEDIAN_PERCENTILE)
+    elite = [starter for starter in contributors if starter.projection >= high]
+    ahead = [starter for starter in contributors if starter.projection > median]
+    matching = [starter for starter in contributors if starter.projection >= median]
+    lines: list[str] = []
+    if standout is not None:
+        counted_only = standout in elite and len(elite) >= 2
+        lines.append(_standout_line(standout, playing, counted_only=counted_only))
+    squad = _squad_line(starters, elite, ahead, matching, standout)
+    if squad:
+        lines.append(squad)
+    elif not lines:
+        lines.append(_ABOVE_ORDINARY)
+    return lines
+
+
+def _short_lines(starters: list[StarterOutlook], playing: list[float]) -> list[str]:
+    lines: list[str] = []
+    if len(starters) < XI_SIZE:
+        lines.append(_finish(_short_xi_clause(len(starters))))
+    blanks = [starter for starter in starters if starter.blank]
+    doubts = [starter for starter in starters if starter.unlikely]
+    benched = [starter for starter in starters if starter.not_starting]
+    floor = _percentile(playing, SQUAD_SCORE_LOW_PERCENTILE)
+    weak = [starter for starter in _contributors(starters) if starter.projection < floor]
+    if blanks:
+        lines.append(_finish(_named_clause(blanks, "no fixture this week", "has", "have")))
+    if doubts:
+        lines.append(_finish(_named_clause(doubts, "unlikely to play", "is", "are")))
+    if benched:
+        lines.append(_finish(_named_clause(benched, "not been starting", "has", "have")))
+    if weak:
+        lines.append(_finish(_weak_clause(weak, len(starters))))
+    if not lines:
+        lines.append(_short_of_best_line(starters, playing))
+    return lines
+
+
+def _short_of_best_line(starters: list[StarterOutlook], playing: list[float]) -> str:
+    contributors = _contributors(starters)
+    high = _percentile(playing, SQUAD_SCORE_HIGH_PERCENTILE)
+    elite = [starter for starter in contributors if starter.projection >= high]
+    below = [starter for starter in contributors if starter.projection < high]
+    if below and len(below) <= 3:
+        return _finish(_named_clause(below, "short of the best projections", "is", "are"))
+    standout = _standout(starters, playing)
+    if standout is not None and len(elite) == 1:
+        name = standout.name or "one starter"
+        return f"Only {name} projects with the best of the field."
+    if not elite:
+        return "Nobody in the XI projects with the best of the field."
+    return _SHORT_OF_BEST
+
+
+def _contributors(starters: list[StarterOutlook]) -> list[StarterOutlook]:
+    return [
+        starter
+        for starter in starters
+        if not starter.blank and not starter.unlikely and not starter.not_starting
+    ]
+
+
+def _standout_line(starter: StarterOutlook, playing: list[float], *, counted_only: bool) -> str:
+    if counted_only:
+        return f"{_counted_twice(starter)}."
+    return _standout_sentence(starter, playing)
+
+
+def _squad_line(
+    starters: list[StarterOutlook],
+    elite: list[StarterOutlook],
+    ahead: list[StarterOutlook],
+    matching: list[StarterOutlook],
+    standout: StarterOutlook | None,
+) -> str:
+    if len(elite) >= 2:
+        return _count_line(
+            len(elite),
+            len(starters),
+            "projects with the best of the field",
+            "project with the best of the field",
+        )
+    if len(ahead) >= 2:
+        return _count_line(
+            len(ahead),
+            len(starters),
+            "projects above a typical player with a fixture",
+            "project above a typical player with a fixture",
+        )
+    if standout is None and len(matching) >= _CLEAR_MAJORITY:
+        return _count_line(
+            len(matching),
+            len(starters),
+            "projects about as much as a typical player with a fixture",
+            "project about as much as a typical player with a fixture",
+        )
+    return ""
+
+
+def _count_line(count: int, squad_size: int, singular: str, plural: str) -> str:
+    if count == XI_SIZE and squad_size == XI_SIZE:
+        return f"Every starter {singular}."
+    if count == 1:
+        return f"1 starter {singular}."
+    return f"{count} starters {plural}."
 
 
 def _score_band(score: float) -> str:
@@ -199,64 +345,6 @@ def _score_band(score: float) -> str:
     if score > 0:
         return "Closer to an ordinary XI than a premium one."
     return "At the bottom of the scale."
-
-
-def _score_detail(starters: list[StarterOutlook], playing: list[float], score: float) -> str:
-    if len(starters) < XI_SIZE:
-        return _sentence(_short_xi_clause(len(starters)))
-
-    blanks = [starter for starter in starters if starter.blank]
-    doubts = [starter for starter in starters if starter.unlikely]
-    benched = [starter for starter in starters if starter.not_starting]
-    floor = _percentile(playing, SQUAD_SCORE_LOW_PERCENTILE)
-    weak = [
-        starter
-        for starter in starters
-        if not starter.blank
-        and not starter.unlikely
-        and not starter.not_starting
-        and starter.projection < floor
-    ]
-    standout = _standout(starters, playing)
-    drag = _drag_clause(blanks, doubts, benched, weak, len(starters))
-
-    if standout is not None and score >= 8:
-        lifted = _standout_sentence(standout, playing)
-        if blanks or doubts or benched:
-            return f"{lifted} {_sentence(drag)}"
-        return lifted
-    if drag and standout is not None and score >= 4:
-        return _sentence(f"{_counted_twice(standout)}, but {drag}")
-    if drag:
-        return _sentence(drag)
-    if standout is not None:
-        return _standout_sentence(standout, playing)
-
-    median = _percentile(playing, _MEDIAN_PERCENTILE)
-    above = sum(1 for starter in starters if starter.projection >= median)
-    if above >= _CLEAR_MAJORITY and score >= 6:
-        if above == len(starters):
-            return "Every starter projects above a typical player with a fixture."
-        return f"{above} starters project above a typical player with a fixture."
-    return "The starters project around the middle of players with a fixture."
-
-
-def _drag_clause(
-    blanks: list[StarterOutlook],
-    doubts: list[StarterOutlook],
-    benched: list[StarterOutlook],
-    weak: list[StarterOutlook],
-    squad_size: int,
-) -> str:
-    if blanks:
-        return _named_clause(blanks, "no fixture this week", "has", "have")
-    if doubts:
-        return _named_clause(doubts, "unlikely to play", "is", "are")
-    if benched:
-        return _named_clause(benched, "not been starting", "has", "have")
-    if weak:
-        return _weak_clause(weak, squad_size)
-    return ""
 
 
 def _standout(starters: list[StarterOutlook], playing: list[float]) -> StarterOutlook | None:
@@ -334,6 +422,13 @@ def _sentence(clause: str) -> str:
     if not clause:
         return clause
     return clause[0].upper() + clause[1:]
+
+
+def _finish(clause: str) -> str:
+    sentence = _sentence(clause.strip())
+    if not sentence or sentence.endswith("."):
+        return sentence
+    return f"{sentence}."
 
 
 def xi_expected_points(

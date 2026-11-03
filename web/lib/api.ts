@@ -161,6 +161,11 @@ export type HorizonPlan = {
   explanation_source?: string;
 };
 
+export type SquadScoreNotes = {
+  added: string[];
+  short_of_10: string[];
+};
+
 export type PublicTeam = {
   entry_id: number;
   name: string;
@@ -195,6 +200,7 @@ export type PublicTeam = {
   caveat: string;
   squad_score: number;
   squad_score_reason: string;
+  squad_score_notes: SquadScoreNotes;
   underperforming: VarianceRow[];
   overperforming: VarianceRow[];
 };

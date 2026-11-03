@@ -127,6 +127,7 @@ def public_team_view(
     *,
     squad_score: float = 0.0,
     squad_score_reason: str = "",
+    squad_score_notes: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     return {
         "entry_id": snapshot.entry_id,
@@ -148,6 +149,7 @@ def public_team_view(
         "caveat": "Transfers already made for the next gameweek are hidden until the deadline.",
         "squad_score": squad_score,
         "squad_score_reason": squad_score_reason,
+        "squad_score_notes": squad_score_notes or {"added": [], "short_of_10": []},
     }
 
 
@@ -196,6 +198,7 @@ def _finish_public_team(
         snapshot,
         squad_score=scored.value,
         squad_score_reason=scored.reason,
+        squad_score_notes=scored.notes.payload(),
     )
     names = team_names if team_names is not None else team_short_names(conn)
     view["squad_players"] = with_pitch_details(view["squad_players"], names, stats_repo.next_event_fixtures(conn))

@@ -46,6 +46,7 @@ def _client(content: str, calls: dict[str, int]) -> OpenRouterClient:
         body = json.loads(request.content)
         assert body["model"] == "test/model"
         assert "squad score" in body["messages"][0]["content"]
+        assert "not a 10" in body["messages"][0]["content"]
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     return OpenRouterClient(_settings(), transport=httpx.MockTransport(handler))

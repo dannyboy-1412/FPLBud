@@ -2,7 +2,7 @@ import { POSITIONS } from "@/components/dashboard/stats/format";
 import { ReturnCompare } from "@/components/dashboard/stats/ReturnCompare";
 import { StatTable } from "@/components/dashboard/stats/StatTable";
 import { PitchSwitcher, type PitchLineup } from "@/components/programme/PitchSwitcher";
-import type { PlayerRow, PublicTeam } from "@/lib/api";
+import type { PlayerRow, PublicTeam, SquadScoreNotes } from "@/lib/api";
 
 function scoreLabel(value: number | undefined) {
   if (value == null || Number.isNaN(value)) return "—";
@@ -29,9 +29,20 @@ export function ReportHeader({
 }
 
 const SCORE_FALLBACK = "Projected points this gameweek, starting XI plus captain.";
+const EMPTY_NOTES: SquadScoreNotes = { added: [], short_of_10: [] };
 
-export function SquadScore({ value, reason }: { value: number; reason?: string }) {
-  const explanation = reason?.trim() || SCORE_FALLBACK;
+export function SquadScore({
+  value,
+  reason,
+  notes = EMPTY_NOTES,
+}: {
+  value: number;
+  reason?: string;
+  notes?: SquadScoreNotes;
+}) {
+  const added = (notes?.added ?? []).filter((line) => line.trim());
+  const shortOfTen = (notes?.short_of_10 ?? []).filter((line) => line.trim());
+  const explained = added.length > 0 || shortOfTen.length > 0;
   return (
     <div className="mt-8 pb-8 border-b border-rule">
       <p className="kicker">Squad score</p>
@@ -39,8 +50,52 @@ export function SquadScore({ value, reason }: { value: number; reason?: string }
         <span>{scoreLabel(value)}</span>
         <span className="caption">/10</span>
       </p>
-      <p className="caption mt-3 max-w-xl">{explanation}</p>
+      {explained ? (
+        <ScoreNotes added={added} shortOfTen={shortOfTen} />
+      ) : (
+        <p className="caption mt-3 max-w-xl">{reason?.trim() || SCORE_FALLBACK}</p>
+      )}
     </div>
+  );
+}
+
+function ScoreNotes({ added, shortOfTen }: { added: string[]; shortOfTen: string[] }) {
+  const both = added.length > 0 && shortOfTen.length > 0;
+  return (
+    <div className={`mt-5 grid gap-x-10 gap-y-6 ${both ? "max-w-2xl sm:grid-cols-2" : "max-w-xl"}`}>
+      {added.length > 0 ? <ScoreNoteList title="Plus points" items={added} mark="+" markClass="text-racing" /> : null}
+      {shortOfTen.length > 0 ? (
+        <ScoreNoteList title="Short of 10" items={shortOfTen} mark="–" markClass="text-ochre" />
+      ) : null}
+    </div>
+  );
+}
+
+function ScoreNoteList({
+  title,
+  items,
+  mark,
+  markClass,
+}: {
+  title: string;
+  items: string[];
+  mark: string;
+  markClass: string;
+}) {
+  return (
+    <section aria-label={title}>
+      <p className="kicker">{title}</p>
+      <ul className="mt-2 space-y-2">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2 text-sm leading-snug">
+            <span className={`${markClass} shrink-0 font-semibold`} aria-hidden="true">
+              {mark}
+            </span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -62,7 +117,7 @@ export function TeamView({
       {showHeader ? (
         <ReportHeader name={team.name} manager={team.manager} overallRank={team.overall_rank} />
       ) : null}
-      <SquadScore value={team.squad_score} reason={team.squad_score_reason} />
+      <SquadScore value={team.squad_score} reason={team.squad_score_reason} notes={team.squad_score_notes} />
       <div className="mt-8">
         <PitchSwitcher team={team} lineup={lineup} />
       </div>

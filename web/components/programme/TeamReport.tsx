@@ -28,7 +28,7 @@ export function ReportHeader({
   );
 }
 
-const SCORE_FALLBACK = "Projected points this gameweek, starting XI plus captain.";
+const SCORE_FALLBACK = "How strong your starting 11 looks this week.";
 const EMPTY_NOTES: SquadScoreNotes = { added: [], short_of_10: [] };
 
 export function SquadScore({
@@ -63,9 +63,9 @@ function ScoreNotes({ added, shortOfTen }: { added: string[]; shortOfTen: string
   const both = added.length > 0 && shortOfTen.length > 0;
   return (
     <div className={`mt-5 grid gap-x-10 gap-y-6 ${both ? "max-w-2xl sm:grid-cols-2" : "max-w-xl"}`}>
-      {added.length > 0 ? <ScoreNoteList title="Plus points" items={added} mark="+" markClass="text-racing" /> : null}
+      {added.length > 0 ? <ScoreNoteList title="Strong picks" items={added} mark="+" markClass="text-racing" /> : null}
       {shortOfTen.length > 0 ? (
-        <ScoreNoteList title="Short of 10" items={shortOfTen} mark="–" markClass="text-ochre" />
+        <ScoreNoteList title="Why it isn't a 10" items={shortOfTen} mark="–" markClass="text-ochre" />
       ) : null}
     </div>
   );

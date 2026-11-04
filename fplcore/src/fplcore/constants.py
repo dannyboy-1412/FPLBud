@@ -26,8 +26,8 @@ GOAL_POINTS = {1: 6, 2: 6, 3: 5, 4: 4}
 PROJ_A_FALLBACK = 1.0
 PROJ_B_FALLBACK = 6.0
 
-# Squad score places an XI on 0–10 between these percentiles of players who have a fixture.
-# 0 is an ordinary XI (25th percentile, captained). 10 is a premium XI (98th percentile, captained).
+# Each starter is placed on 0–10 between these percentiles of players who have a fixture.
+# 0 is an ordinary starter (25th). 10 is a premium starter (98th). The squad score is the mean of the 11.
 SQUAD_SCORE_LOW_PERCENTILE = 25.0
 SQUAD_SCORE_HIGH_PERCENTILE = 98.0
 

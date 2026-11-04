@@ -150,16 +150,15 @@ def _spread_field() -> list[float]:
     return [1.0, 2.0, 3.0, 4.0]
 
 
-def test_squad_score_counts_the_captain_twice() -> None:
+def test_squad_score_averages_each_starter_once() -> None:
     field = _spread_field()
-    # Eleven 2.5s is 27.5, plus the captain again is 30.
-    # Forgetting the captain would land on 2.5 rather than 3.4.
+    # 2.5 sits between the 25th (1.75) and the 98th (3.94), so each starter is 3.4.
     assert squad_score_for_xi([2.5] * 11, field) == 3.4
 
 
 def test_squad_score_premium_xi_is_ten_and_ordinary_xi_is_zero() -> None:
     field = _spread_field()
-    # 98th percentile of 1..4 is 3.94. Twelve of those (XI + captain) is the top of the scale.
+    # 98th percentile of 1..4 is 3.94. Every starter at that mark is a 10.
     assert squad_score_for_xi([3.94] * 11, field) == 10.0
     assert squad_score_for_xi([10.0] * 11, field) == 10.0
     # 25th percentile is 1.75, so an XI below that scores 0.
@@ -176,7 +175,8 @@ def test_squad_score_flat_field_is_five() -> None:
 
 
 def test_squad_score_short_xi_pads_with_zeros() -> None:
-    assert squad_score_for_xi([4.0], _spread_field()) == 0.0
+    # One premium starter is a 10, and the ten empty places are 0.
+    assert squad_score_for_xi([4.0], _spread_field()) == 0.9
 
 
 def test_squad_score_ignores_players_past_the_xi() -> None:
@@ -187,85 +187,53 @@ def _outlook(name: str, projection: float, **flags: bool) -> StarterOutlook:
     return StarterOutlook(name=name, projection=projection, **flags)
 
 
-def test_squad_score_reason_for_a_premium_xi_names_who_is_counted_twice() -> None:
+def test_squad_score_reason_for_a_premium_xi_says_all_eleven_are_strong() -> None:
     starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(10)]
     scored = explain_squad_score(starters, _spread_field())
     assert scored.value == 10.0
-    assert scored.notes.added == (
-        "Haaland is counted twice.",
-        "Every starter projects with the best of the field.",
-    )
+    assert scored.notes.added == ("All 11 starters are strong picks this week.",)
     assert scored.notes.short_of_10 == ()
-    assert scored.reason == (
-        "A premium XI this week. "
-        "Haaland is counted twice. "
-        "Every starter projects with the best of the field."
-    )
+    assert scored.reason == "All 11 starters are strong picks this week."
 
 
-def test_squad_score_reason_for_an_ordinary_xi_explains_the_middle() -> None:
+def test_squad_score_reason_for_an_ordinary_xi_names_who_keeps_it_off_10() -> None:
     scored = explain_squad_score([_outlook(f"P{i}", 2.5) for i in range(11)], _spread_field())
     assert scored.value == 3.4
-    assert scored.notes.added == (
-        "Every starter projects about as much as a typical player with a fixture.",
-    )
-    assert scored.notes.short_of_10 == (
-        "Nobody in the XI projects with the best of the field.",
-    )
-    assert scored.reason == (
-        "Closer to an ordinary XI than a premium one. "
-        "Every starter projects about as much as a typical player with a fixture. "
-        "Nobody in the XI projects with the best of the field."
-    )
+    assert scored.notes.added == ()
+    assert scored.notes.short_of_10 == ("P0, P1 and 9 others are the ones keeping this off a 10.",)
+    assert scored.reason == "P0, P1 and 9 others are the ones keeping this off a 10."
 
 
 def test_squad_score_reason_for_a_weak_xi_says_why_it_is_at_the_bottom() -> None:
     scored = explain_squad_score([_outlook(f"P{i}", 1.0) for i in range(11)], _spread_field())
     assert scored.value == 0.0
     assert scored.notes.added == ()
-    assert scored.notes.short_of_10 == (
-        "Every starter projects below a typical player with a fixture.",
-    )
-    assert scored.reason == (
-        "At the bottom of the scale. "
-        "Every starter projects below a typical player with a fixture."
-    )
+    assert scored.notes.short_of_10 == ("P0, P1 and 9 others are the ones keeping this off a 10.",)
+    assert scored.reason == "P0, P1 and 9 others are the ones keeping this off a 10."
 
 
-def test_squad_score_reason_names_blanks_holding_back_a_strong_captain() -> None:
+def test_squad_score_reason_names_blanks_holding_back_strong_picks() -> None:
     starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(7)]
     starters += [_outlook(name, 0.0, blank=True) for name in ("Gordon", "Watkins", "Wood")]
     scored = explain_squad_score(starters, _spread_field())
-    assert scored.value == 5.5
-    assert scored.notes.added == (
-        "Haaland is counted twice.",
-        "8 starters project with the best of the field.",
-    )
-    assert scored.notes.short_of_10 == (
-        "Gordon, Watkins and Wood have no fixture this week.",
-    )
+    assert scored.value == 7.3
+    assert scored.notes.added == ("Haaland, P0 and 6 others are strong picks this week.",)
+    assert scored.notes.short_of_10 == ("Gordon, Watkins and Wood have no game this week.",)
     assert scored.reason == (
-        "Around the middle of the scale. "
-        "Haaland is counted twice. "
-        "8 starters project with the best of the field. "
-        "Gordon, Watkins and Wood have no fixture this week."
+        "Haaland, P0 and 6 others are strong picks this week. "
+        "Gordon, Watkins and Wood have no game this week."
     )
 
 
-def test_squad_score_reason_keeps_a_blank_when_the_xi_is_still_premium() -> None:
+def test_squad_score_reason_keeps_a_blank_when_the_rest_are_strong() -> None:
     starters = [_outlook("Haaland", 3.94)] + [_outlook(f"P{i}", 3.94) for i in range(9)]
     starters.append(_outlook("Gordon", 0.0, blank=True))
     scored = explain_squad_score(starters, _spread_field())
-    assert scored.notes.added == (
-        "Haaland is counted twice.",
-        "10 starters project with the best of the field.",
-    )
-    assert scored.notes.short_of_10 == ("Gordon has no fixture this week.",)
+    assert scored.value == 9.1
+    assert scored.notes.added == ("Haaland, P0 and 8 others are strong picks this week.",)
+    assert scored.notes.short_of_10 == ("Gordon has no game this week.",)
     assert scored.reason == (
-        "A premium XI this week. "
-        "Haaland is counted twice. "
-        "10 starters project with the best of the field. "
-        "Gordon has no fixture this week."
+        "Haaland, P0 and 8 others are strong picks this week. Gordon has no game this week."
     )
 
 
@@ -275,7 +243,7 @@ def test_squad_score_reason_collapses_a_long_list_of_blanks() -> None:
         _outlook(name, 0.0, blank=True) for name in ("Gordon", "Watkins", "Wood", "Isak", "Wissa")
     ]
     scored = explain_squad_score(starters, _spread_field())
-    assert "Gordon, Watkins and 3 others have no fixture this week." in scored.reason
+    assert "Gordon, Watkins and 3 others have no game this week." in scored.reason
 
 
 def test_squad_score_notes_list_each_reason_it_is_short_of_10() -> None:
@@ -284,54 +252,48 @@ def test_squad_score_notes_list_each_reason_it_is_short_of_10() -> None:
     scored = explain_squad_score(starters, _spread_field())
     assert scored.notes.added
     assert scored.notes.short_of_10 == (
-        "Gordon has no fixture this week.",
-        "Saka is unlikely to play.",
+        "Gordon has no game this week.",
+        "Saka might not play.",
+        "P0, P1 and 6 others are the ones keeping this off a 10.",
     )
+    assert scored.notes.added == ("Haaland is a strong pick this week.",)
 
 
 def test_squad_score_reason_names_a_player_who_is_unlikely_to_play() -> None:
     starters = [_outlook("Saka", 1.0, unlikely=True)] + [_outlook(f"P{i}", 2.5) for i in range(10)]
     scored = explain_squad_score(starters, _spread_field())
-    assert scored.reason.endswith("Saka is unlikely to play.")
+    assert "Saka might not play." in scored.reason
 
 
 def test_squad_score_reason_names_a_player_who_has_not_been_starting() -> None:
     starters = [_outlook("Wright", 0.0, not_starting=True)] + [_outlook(f"P{i}", 2.5) for i in range(10)]
     scored = explain_squad_score(starters, _spread_field())
-    assert scored.reason.endswith("Wright has not been starting.")
+    assert "Wright has not been starting." in scored.reason
 
 
 def test_squad_score_reason_for_starters_above_the_middle_of_the_field() -> None:
     scored = explain_squad_score([_outlook(f"P{i}", 3.2) for i in range(11)], _spread_field())
     assert scored.value == 6.6
-    assert scored.notes.added == (
-        "Every starter projects above a typical player with a fixture.",
-    )
-    assert scored.notes.short_of_10 == (
-        "Nobody in the XI projects with the best of the field.",
-    )
-    assert scored.reason == (
-        "Above the middle of the scale. "
-        "Every starter projects above a typical player with a fixture. "
-        "Nobody in the XI projects with the best of the field."
-    )
+    assert scored.notes.added == ()
+    assert scored.notes.short_of_10 == ("P0, P1 and 9 others are the ones keeping this off a 10.",)
+    assert scored.reason == "P0, P1 and 9 others are the ones keeping this off a 10."
 
 
 def test_squad_score_reason_for_a_flat_field_and_for_no_field() -> None:
     flat = explain_squad_score([_outlook(f"P{i}", 3.0) for i in range(11)], [3.0, 3.0, 3.0])
     assert flat.value == 5.0
-    assert flat.reason == "Players with a fixture all project the same, so the XI sits in the middle."
+    assert flat.reason == "Players with a game all look the same this week, so this side sits in the middle."
     empty = explain_squad_score([], [])
     assert empty.value == 0.0
-    assert empty.reason == "Not enough players have a fixture to place this XI."
+    assert empty.reason == "Not enough players have a game this week to score this side."
 
 
 def test_squad_score_reason_for_a_short_xi() -> None:
     scored = explain_squad_score([_outlook("Haaland", 4.0)], _spread_field())
-    assert scored.value == 0.0
-    assert scored.notes.added == ()
-    assert scored.notes.short_of_10 == ("Only 1 of the 11 starters is set.",)
-    assert scored.reason == "At the bottom of the scale. Only 1 of the 11 starters is set."
+    assert scored.value == 0.9
+    assert scored.notes.added == ("Haaland is a strong pick this week.",)
+    assert scored.notes.short_of_10 == ("Only 1 of the 11 places is filled.",)
+    assert scored.reason == "Haaland is a strong pick this week. Only 1 of the 11 places is filled."
 
 
 def _score_row(name: str, **overrides: object) -> dict:
@@ -361,14 +323,14 @@ def test_score_starting_xi_names_the_blank_and_matches_the_number() -> None:
     field = [projection_for_row(row, None) for row in rows.values()]
     assert scored.value == squad_score_for_xi(xi_projections(xi, rows), field)
     assert "Gordon" in scored.reason
-    assert "no fixture" in scored.reason
+    assert "no game" in scored.reason
 
 
 def test_score_starting_xi_names_an_injury_and_a_player_without_minutes() -> None:
     rows = {i: _score_row(f"P{i}", xgi_score=(i % 10) / 10) for i in range(1, 40)}
     rows[1] = _score_row("Saka", status="i", chance_of_playing_next_round=0)
     injured = score_starting_xi(list(range(1, 12)), rows)
-    assert "Saka is unlikely to play." in injured.reason
+    assert "Saka might not play." in injured.reason
 
     rows[1] = _score_row("Wright", minutes=0)
     idle = score_starting_xi(list(range(1, 12)), rows)

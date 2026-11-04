@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from typing import Any
 
 from fastapi import HTTPException
 from psycopg import Connection
 
+from fplcore.agent.queue import enqueue_run
 from fplcore.agent.runner import try_llm_cap
 from fplcore.client import FplClient, FplNotFoundError
 from fplcore.constants import (
@@ -15,7 +17,7 @@ from fplcore.constants import (
     METRIC_LABELS,
     PRICE_PRESSURE_CAVEAT,
 )
-from fplcore.db import stats_repo
+from fplcore.db import chat_repo, stats_repo
 from fplcore.db.repos import (
     current_season_id,
     get_entry_cache,
@@ -23,6 +25,7 @@ from fplcore.db.repos import (
     get_suggested_lineup,
     get_suggested_transfers,
     put_entry_cache,
+    save_snapshot,
     save_squad_score_reason,
     save_suggested_lineup,
     save_suggested_transfers,
@@ -69,7 +72,12 @@ from fplcore.stats.squad import (
     squad_differentials,
     template_threats,
 )
-from fplcore.team_import import TeamSnapshot, build_snapshot, merged_from_payloads
+from fplcore.team_import import (
+    TeamSnapshot,
+    build_snapshot,
+    merged_from_payloads,
+    snapshot_lags_published,
+)
 from fplcore.transfer_advice import (
     PLAN_HORIZON,
     advice_fixtures,
@@ -77,6 +85,8 @@ from fplcore.transfer_advice import (
     stored_advice_ok,
     transfer_cache_hash,
 )
+
+logger = logging.getLogger("fplbud.squad")
 
 
 async def load_merged_entry(conn: Connection, client: FplClient, entry_id: int) -> tuple[dict[str, Any], Any]:
@@ -97,6 +107,62 @@ async def load_merged_entry(conn: Connection, client: FplClient, entry_id: int) 
     put_entry_cache(conn, entry_id, entry.current_event, payload)
     conn.commit()
     return payload, bootstrap
+
+
+def published_squad_event(conn: Connection) -> int | None:
+    """Latest gameweek whose deadline has passed. Its picks are the public squad."""
+    try:
+        season_id = current_season_id(conn)
+    except RuntimeError:
+        return None
+    started = stats_repo.started_gameweek(conn, season_id)
+    if not started:
+        return None
+    return int(started["id"])
+
+
+async def refresh_published_squad(conn: Connection, settings: Settings, user_id: str) -> int | None:
+    """Store the published squad when the saved snapshot is from an earlier gameweek.
+
+    Chat and the agent read team_snapshots, which are otherwise written only on
+    import. A wildcard played after onboarding would stay invisible.
+    """
+    profile = conn.execute(
+        "select fpl_entry_id, weights from public.profiles where id = %s",
+        [user_id],
+    ).fetchone()
+    if profile is None or not profile["fpl_entry_id"]:
+        return None
+    latest = chat_repo.latest_snapshot(conn, user_id)
+    stored_event = int(latest["event"]) if latest else None
+    if not snapshot_lags_published(stored_event, published_squad_event(conn)):
+        return None
+    entry_id = int(profile["fpl_entry_id"])
+    try:
+        async with FplClient(settings) as client:
+            payload, bootstrap = await load_merged_entry(conn, client, entry_id)
+    except FplNotFoundError:
+        logger.warning("published squad missing for saved entry")
+        return None
+    overrides = latest.get("overrides") if latest and isinstance(latest.get("overrides"), dict) else None
+    snapshot = snapshot_from_cache(payload, bootstrap, current_season_id(conn), overrides)
+    stored = save_snapshot(conn, snapshot, user_id)
+    new_id = int(stored["id"])
+    previous_id = int(latest["id"]) if latest else None
+    if previous_id == new_id:
+        return None
+    version = conn.execute("select id from data_versions order by id desc limit 1").fetchone()
+    enqueue_run(
+        conn,
+        user_id=user_id,
+        entry_id=entry_id,
+        snapshot_id=new_id,
+        trigger="data_refresh",
+        weights=profile["weights"] or DEFAULT_WEIGHTS,
+        data_version=int(version["id"]) if version else None,
+    )
+    logger.info("published squad snapshot %s replaced %s", new_id, previous_id)
+    return new_id
 
 
 def snapshot_from_cache(

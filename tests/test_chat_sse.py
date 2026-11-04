@@ -83,6 +83,10 @@ def _wire(
 
     if isinstance(script, ScriptedLlm):
         script.on_stream = on_stream
+    async def _no_refresh(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(runtime_mod, "refresh_published_squad", _no_refresh)
     monkeypatch.setattr(runtime_mod.chat_repo, "latest_snapshot", lambda *_a, **_k: {"id": 1})
     monkeypatch.setattr(runtime_mod.chat_repo, "claim_turn", claim)
     monkeypatch.setattr(runtime_mod.chat_repo, "get_thread", lambda *_a, **_k: {"id": THREAD, "context": None})

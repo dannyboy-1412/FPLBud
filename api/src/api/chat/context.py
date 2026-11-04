@@ -1,4 +1,7 @@
-"""Pinned CONTEXT block. Built from stored snapshots, never a live FPL call."""
+"""Pinned CONTEXT block. Built from the latest stored snapshot.
+
+Chat refreshes that snapshot before the turn when a later gameweek has published picks.
+"""
 
 from __future__ import annotations
 
@@ -179,7 +182,7 @@ def _apply_snapshot(
 def _apply_plan(view: ContextView, conn: Connection, user_id: str) -> None:
     found = conn.execute(
         """
-        select r.data_version, s.plan->>'headline' as headline, s.explanation
+        select r.snapshot_id, r.data_version, s.plan->>'headline' as headline, s.explanation
           from agent_runs r
           join agent_suggestions s on s.run_id = r.id and s.horizon = 1
          where r.user_id = %s and r.status = 'succeeded'
@@ -191,12 +194,21 @@ def _apply_plan(view: ContextView, conn: Connection, user_id: str) -> None:
     if found is None:
         return
     row = cast(dict[str, Any], found)
+    if plan_squad_differs(view.snapshot_id, row.get("snapshot_id")):
+        view.plan_fresh = False
+        return
     headline = row["headline"] or ""
     if not headline and row["explanation"]:
         headline = str(row["explanation"]).split(".")[0]
     view.plan_headline = str(headline)[:180] or None
     if view.data_version is not None and row["data_version"] is not None:
         view.plan_fresh = int(row["data_version"]) == int(view.data_version)
+
+
+def plan_squad_differs(current: int | None, saved: object) -> bool:
+    if current is None or isinstance(saved, bool) or not isinstance(saved, int):
+        return False
+    return saved != current
 
 
 def _players(conn: Connection, season_id: str, ids: list[int]) -> dict[int, dict[str, Any]]:

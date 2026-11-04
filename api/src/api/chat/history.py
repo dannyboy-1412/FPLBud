@@ -74,7 +74,12 @@ def prompt_messages(
     Returns messages, the pinned text, a context payload when it still needs writing, and the update.
     """
     pinned_text, previous = _pinned(stored_context, view)
-    to_pin = None if stored_context else {"text": pinned_text, "fingerprint": fingerprint(view)}
+    squad_moved = isinstance(stored_context, dict) and previous.snapshot_id != view.snapshot_id
+    if squad_moved:
+        pinned_text = render_context(view)
+    to_pin = None
+    if stored_context is None or squad_moved:
+        to_pin = {"text": pinned_text, "fingerprint": fingerprint(view)}
     history = [message_from_row(row) for row in history_rows]
     history = trim_history(clear_old_tool_results(history), budget=history_budget)
     update = render_context_update(previous, view)

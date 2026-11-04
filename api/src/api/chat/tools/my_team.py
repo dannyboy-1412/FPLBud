@@ -54,7 +54,10 @@ def _run(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
         },
         as_of=view.data_as_of,
         data_version=view.data_version,
-        notes=["Free transfers are an estimate from the last import."],
+        notes=[
+            "Free transfers are an estimate.",
+            "This is the latest published squad. Transfers for a deadline that has not passed are hidden.",
+        ],
     )
 
 

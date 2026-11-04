@@ -152,6 +152,15 @@ class TeamSnapshot:
         }
 
 
+def snapshot_lags_published(snapshot_event: int | None, published_event: int | None) -> bool:
+    """True when a later deadline has published picks this snapshot does not have."""
+    if published_event is None:
+        return False
+    if snapshot_event is None:
+        return True
+    return snapshot_event < published_event
+
+
 def snapshot_from_row(
     row: Mapping[str, Any],
     *,

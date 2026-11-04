@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.chat.context import pounds
+from api.chat.context import plan_squad_differs, pounds
 from api.chat.tools.common import ok
 from api.services import build_horizon_plan
 from fplcore.chat.registry import BoundTool
@@ -38,6 +38,13 @@ def _suggestions(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
     run = latest_succeeded_run(conn, ctx.user_id)
     if run is None:
         return failure("NO_PLAN", "There is no saved plan yet.", hint="Open the dashboard and let the agent finish.")
+    if plan_squad_differs(ctx.snapshot_id, run.get("snapshot_id")):
+        return ok(
+            {"plans": [], "stale": True, "chips_are_heuristic": True},
+            as_of=None,
+            data_version=ctx.data_version,
+            notes=["The saved plan is for an older squad. A new one is being prepared."],
+        )
     rows = conn.execute(
         """
         select horizon, plan, hits, gain_vs_roll, explanation

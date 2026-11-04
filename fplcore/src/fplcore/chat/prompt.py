@@ -182,7 +182,8 @@ def render_context(view: ContextView) -> str:
         chips = ", ".join(view.chips_available) or "none"
         used = ", ".join(view.chips_used) or "none"
         lines.append(
-            f"SQUAD (snapshot GW {view.snapshot_gw} fetched {view.snapshot_fetched_at}; "
+            f"SQUAD (published GW {view.snapshot_gw} picks, fetched {view.snapshot_fetched_at}; "
+            f"transfers for a later deadline are hidden; "
             f"bank {bank}; FT {view.free_transfers} (estimated); "
             f"chips available: {chips}; used: {used})"
         )
@@ -223,7 +224,19 @@ def render_context_update(previous: ContextView, current: ContextView) -> str | 
             f"({_hours(current.hours_to_deadline)})"
         )
     if previous.snapshot_id != current.snapshot_id:
-        changes.append(f"squad snapshot {current.snapshot_id} GW {current.snapshot_gw}")
+        changes.append(
+            f"squad snapshot {current.snapshot_id} GW {current.snapshot_gw} "
+            "replaced the previous squad. Use this list. Earlier squad lists in the thread are out of date."
+        )
+        if current.starters:
+            changes.append(" XI: " + " | ".join(_row(row) for row in current.starters))
+        if current.bench:
+            changes.append(" BENCH: " + " | ".join(_row(row) for row in current.bench))
+        if current.captain_id:
+            changes.append(
+                f" C: {current.captain_id} {current.captain_name or ''} "
+                f"V: {current.vice_id or ''} {current.vice_name or ''}"
+            )
     if previous.plan_headline != current.plan_headline:
         changes.append(f"plan: {current.plan_headline or 'none'}")
     if previous.flags != current.flags:

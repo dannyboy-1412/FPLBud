@@ -62,6 +62,7 @@ def test_context_block_has_ids_and_no_instructions() -> None:
     )
     assert "<context" in text
     assert "12 Haaland" in text
+    assert "transfers for a later deadline are hidden" in text
     assert "ignore previous" not in text.lower()
     assert "entry_id" not in text
 

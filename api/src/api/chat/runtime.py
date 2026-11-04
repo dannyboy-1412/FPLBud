@@ -18,6 +18,7 @@ from psycopg_pool import ConnectionPool
 
 from api.chat.context import build_context
 from api.chat.history import prompt_messages, rows_for_round
+from api.services import refresh_published_squad
 from api.chat.tools import build_registry
 from fplcore import constants
 from fplcore.chat.events import (
@@ -160,6 +161,7 @@ class ChatRuntime:
             logger.warning("chat injection suspected user=%s", _hash(user_id, self.settings))
         if not clean:
             return Refuse(400, "EMPTY", "Ask a question about your FPL team.")
+        await self._refresh_squad(user_id)
         return await asyncio.to_thread(
             self._prepare_sync,
             user_id,
@@ -168,6 +170,13 @@ class ChatRuntime:
             client_msg_id,
             client,
         )
+
+    async def _refresh_squad(self, user_id: str) -> None:
+        try:
+            with self.open_conn() as conn:
+                await refresh_published_squad(conn, self.settings, user_id)
+        except Exception:
+            logger.exception("published squad refresh failed")
 
     def _block(
         self,
@@ -256,7 +265,8 @@ class ChatRuntime:
                 history_budget=self.settings.chat_history_token_budget,
             )
             if to_pin is not None:
-                chat_repo.pin_context(conn, thread_id, to_pin, view.data_version)
+                write_context = chat_repo.replace_context if stored else chat_repo.pin_context
+                write_context(conn, thread_id, to_pin, view.data_version)
             if update:
                 chat_repo.append_messages(
                     conn,

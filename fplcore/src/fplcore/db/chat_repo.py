@@ -113,6 +113,24 @@ def pin_context(
     return cur.rowcount > 0
 
 
+def replace_context(
+    conn: Connection,
+    thread_id: str,
+    context: dict[str, Any],
+    data_version: int | None,
+) -> bool:
+    """Replace the pinned block when the published squad has changed."""
+    cur = conn.execute(
+        """
+        update chat_threads
+           set context = %s, context_data_version = %s
+         where id = %s
+        """,
+        [_json(context), data_version, thread_id],
+    )
+    return cur.rowcount > 0
+
+
 def visible_messages(conn: Connection, thread_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
         """

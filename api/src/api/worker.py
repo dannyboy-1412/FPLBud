@@ -44,9 +44,12 @@ async def poll_loop(settings: Settings) -> None:
             worked = False
         now = time.monotonic()
         if now - last_prune >= PRUNE_INTERVAL_SECONDS:
+            # Stamp the attempt before the query. A failure used to leave
+            # last_prune at 0, so a missing chat_threads retried every poll
+            # and blocked request handling on this loop.
+            last_prune = now
             try:
-                _prune_once()
-                last_prune = now
+                await asyncio.to_thread(_prune_once)
             except Exception:
                 log.exception("retention prune failed")
         await asyncio.sleep(0 if worked else settings.agent_poll_interval_seconds)

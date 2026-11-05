@@ -170,6 +170,23 @@ async def test_does_not_retry_after_text_was_emitted() -> None:
     await client.aclose()
 
 
+async def test_http_error_includes_the_provider_message() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(401, json={"error": {"message": "User not found."}})
+
+    client = _client(handler)
+    try:
+        await client.stream([Message(role="user", content="hi")], tools=None, max_tokens=10)
+    except LlmError as exc:
+        assert exc.status == 401
+        assert exc.retryable is False
+        assert "User not found" in str(exc)
+    else:
+        raise AssertionError("expected LlmError")
+    await client.aclose()
+
+
 async def test_missing_key_is_not_retried() -> None:
     client = OpenAICompatClient(api_key="", base_url="https://example.test/v1", model="m", timeout=2)
     try:

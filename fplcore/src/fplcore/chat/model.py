@@ -219,10 +219,10 @@ class OpenAICompatClient:
                 headers=_headers(self.api_key, self.site_url),
             ) as response:
                 if response.status_code >= 400:
-                    await response.aread()
+                    body = await response.aread()
                     retryable = response.status_code == 429 or response.status_code >= 500
                     raise LlmError(
-                        f"http {response.status_code}",
+                        f"http {response.status_code}: {_error_detail(body)}",
                         status=response.status_code,
                         retryable=retryable,
                     )
@@ -291,3 +291,21 @@ def _retry_delay(error: LlmError) -> float:
     if error.status == 429:
         return 1.0
     return 0.5
+
+
+def _error_detail(body: bytes) -> str:
+    text = body.decode("utf-8", errors="replace").strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        err = payload.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            text = str(err["message"])
+        elif isinstance(err, str):
+            text = err
+    text = " ".join(text.split())
+    if len(text) > 180:
+        text = text[:177] + "..."
+    return text or "no error body"

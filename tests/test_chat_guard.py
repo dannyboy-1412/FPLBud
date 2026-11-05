@@ -39,6 +39,15 @@ def test_unknown_markup_and_invented_price_fail() -> None:
     assert leaked.hard_fail
 
 
+def test_missing_chip_uses_the_name_from_the_question() -> None:
+    corpus = Corpus(user_text="do I have szoboslai in my team?")
+    report = grounding_check("No—[[?]] isn't in your saved squad.", corpus)
+    assert report.text == "No—szoboslai isn't in your saved squad."
+    assert report.hard_fail is False
+    kept = grounding_check("Captain [[p:12|Haaland]].", Corpus(player_ids={12}, names={12: "Haaland"}))
+    assert "[[p:12|Haaland]]" in kept.text
+
+
 def test_fallback_uses_only_tool_facts() -> None:
     text = fallback_from_results(
         [ToolResult(ok=True, data={"captain": {"id": 12, "name": "Haaland"}})],

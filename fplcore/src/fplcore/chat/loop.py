@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from time import monotonic
@@ -22,6 +23,8 @@ from fplcore.chat.types import (
     TurnCounters,
     Usage,
 )
+
+logger = logging.getLogger("fplbud.chat")
 
 INVALID_CODES = {"INVALID_ARGUMENT", "UNKNOWN_TOOL"}
 
@@ -230,6 +233,7 @@ async def run_turn(
             from fplcore.chat.model import LlmError
 
             exc = streamed.error
+            logger.warning("chat model call failed: %s", exc)
             retryable = isinstance(exc, LlmError) and exc.retryable
             code = "CAPPED" if isinstance(exc, LlmError) and exc.status == 429 else "UNAVAILABLE"
             if ran and force:
@@ -297,7 +301,13 @@ async def run_turn(
     if failed is not None:
         yield failed
         return
-    corpus = _corpus(context, ran, canary=canary, prompt_text=prompt_text)
+    corpus = _corpus(
+        context,
+        ran,
+        canary=canary,
+        prompt_text=prompt_text,
+        user_text=_question_text(messages),
+    )
     yield StatusEvent(phase="checking")
     try:
         final = await checker.finalise(draft, llm=llm, cfg=cfg, corpus=corpus)
@@ -334,12 +344,20 @@ def _shorten(text: str) -> str:
     return clipped.rstrip() + " (shortened)" if len(text) > 1800 else text
 
 
+def _question_text(messages: list[Message]) -> str:
+    for message in reversed(messages):
+        if message.role == "user" and message.content != FORCE_FINAL_INSTRUCTION:
+            return message.content
+    return ""
+
+
 def _corpus(
     context: ContextView,
     ran: list[tuple[ToolCall, ToolResult]],
     *,
     canary: str,
     prompt_text: str,
+    user_text: str,
 ) -> Corpus:
     from fplcore.chat.guard import corpus_from_turn
 
@@ -356,6 +374,7 @@ def _corpus(
         canary=canary,
         prompt_text=prompt_text,
         fallback_text=fallback_from_results(results, headline=context.plan_headline),
+        user_text=user_text,
     )
 
 

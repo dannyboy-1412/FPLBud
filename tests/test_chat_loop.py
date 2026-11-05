@@ -11,7 +11,7 @@ from fplcore.chat.loop import LoopFailed, LoopFinished, run_turn
 from fplcore.chat.prompt import ContextView
 from fplcore.chat.registry import BoundTool, ToolRegistry, null_connection
 from fplcore.chat.testing import ScriptedLlm, text_turn, tool_turn
-from fplcore.chat.types import ChatCfg, ToolContext, ToolResult, failure
+from fplcore.chat.types import ChatCfg, Message, ToolContext, ToolResult, failure
 
 
 class _Empty(BaseModel):
@@ -277,6 +277,30 @@ def test_handler_exception_becomes_internal() -> None:
     import asyncio
 
     assert "don't know" in asyncio.run(go())
+
+
+def test_squad_answer_names_the_player_when_the_chip_has_no_id() -> None:
+    async def go() -> LoopFinished:
+        llm = ScriptedLlm([text_turn("No—[[?]] isn't in your saved squad.")])
+        events: list[object] = []
+        async for event in run_turn(
+            [Message(role="user", content="do I have szoboslai in my team?")],
+            llm=llm,
+            tools=_registry(),
+            cfg=ChatCfg(max_rounds=2, max_tool_calls=2, turn_timeout_s=30),
+            ctx=_ctx(),
+            context=ContextView(decision_gw=11, data_as_of="2026-11-05T06:59:00Z"),
+        ):
+            events.append(event)
+        final = events[-1]
+        assert isinstance(final, LoopFinished)
+        return final
+
+    import asyncio
+
+    finished = asyncio.run(go())
+    assert finished.text == "No—szoboslai isn't in your saved squad."
+    assert finished.citations == []
 
 
 def test_failure_helper_shape() -> None:

@@ -24,6 +24,81 @@ _GAMBLE = re.compile(
     r"\b(accumulator|bet365|paddy power|william hill|odds of)\b",
     re.IGNORECASE,
 )
+_CHIP = re.compile(r"\[\[([^\]]*)\]\]")
+_MEMBERSHIP_NAME = re.compile(
+    r"\b(?:have|got|own)\s+(.+?)\s+in\s+my\s+(?:team|squad)\b",
+    re.IGNORECASE,
+)
+_AFTER_HAVE = re.compile(
+    r"\b(?:have|got|own)\s+([A-Za-z][A-Za-z'’-]{1,}(?:\s+[A-Za-z][A-Za-z'’-]{1,}){0,2})",
+    re.IGNORECASE,
+)
+_NAME_STOP = frozenset(
+    {
+        "do",
+        "i",
+        "me",
+        "my",
+        "have",
+        "has",
+        "had",
+        "in",
+        "on",
+        "the",
+        "a",
+        "an",
+        "team",
+        "squad",
+        "saved",
+        "is",
+        "are",
+        "was",
+        "were",
+        "there",
+        "own",
+        "got",
+        "get",
+        "does",
+        "did",
+        "you",
+        "we",
+        "our",
+        "this",
+        "that",
+        "please",
+        "what",
+        "who",
+        "which",
+        "where",
+        "when",
+        "why",
+        "how",
+        "can",
+        "could",
+        "should",
+        "would",
+        "about",
+        "of",
+        "for",
+        "to",
+        "and",
+        "or",
+        "not",
+        "no",
+        "yes",
+        "any",
+        "some",
+        "player",
+        "players",
+        "him",
+        "her",
+        "them",
+        "he",
+        "she",
+        "they",
+        "it",
+    }
+)
 
 MAX_ANSWER_CHARS = 1800
 NAME_LIMIT = 40
@@ -102,6 +177,47 @@ def parse_markup(text: str) -> list[Citation]:
     ]
 
 
+def _asked_player_name(user_text: str) -> str:
+    match = _MEMBERSHIP_NAME.search(user_text) or _AFTER_HAVE.search(user_text)
+    if match:
+        name = " ".join(match.group(1).split())
+        if name.casefold() not in _NAME_STOP:
+            return name
+    tokens = [
+        token
+        for token in re.findall(r"[A-Za-z][A-Za-z'’-]{2,}", user_text)
+        if token.casefold() not in _NAME_STOP
+    ]
+    if len(tokens) == 1:
+        return tokens[0]
+    return ""
+
+
+def _restore_player_mentions(text: str, *, user_text: str, names: dict[int, str] | None = None) -> str:
+    """The model writes [[?]] when it has no player id. Show the asked name instead."""
+    directory = names or {}
+    asked = _asked_player_name(user_text)
+
+    def replace(match: re.Match[str]) -> str:
+        inner = match.group(1).strip()
+        valid = re.fullmatch(r"p:\s*(\d+)\s*\|\s*([^|]+)", inner)
+        if valid:
+            player_id = int(valid.group(1))
+            label = valid.group(2).strip()
+            if label and label != "?":
+                return f"[[p:{player_id}|{label}]]"
+            canonical = directory.get(player_id, "")
+            if canonical:
+                return f"[[p:{player_id}|{canonical}]]"
+            return asked or "that player"
+        label = inner.split("|")[-1].strip() if "|" in inner else inner
+        if not label or set(label) <= {"?"}:
+            return asked or "that player"
+        return label
+
+    return _CHIP.sub(replace, text)
+
+
 @dataclass
 class GroundingFlag:
     check: str
@@ -138,7 +254,7 @@ def grounding_check(text: str, corpus: Corpus, *, names_by_id: dict[int, str] | 
     flags: list[GroundingFlag] = []
     hard = False
     directory = names_by_id or corpus.names
-    rewritten = text
+    rewritten = _restore_player_mentions(text, user_text=corpus.user_text, names=directory)
 
     if corpus.canary and corpus.canary in text:
         flags.append(GroundingFlag("canary", "prompt marker appeared in the answer"))
@@ -275,6 +391,7 @@ def corpus_from_turn(
     canary: str,
     prompt_text: str,
     fallback_text: str,
+    user_text: str = "",
 ) -> Corpus:
     from fplcore.chat.types import ToolResult
 
@@ -308,6 +425,7 @@ def corpus_from_turn(
         canary=canary,
         fallback_text=fallback_text,
         prompt_text=prompt_text,
+        user_text=user_text,
     )
 
 
@@ -364,7 +482,12 @@ class IdentityFinaliser:
 
     async def finalise(self, draft: str, *, llm: Any, cfg: Any, corpus: Corpus) -> Finalised:
         del llm, cfg
-        text = draft.strip() or corpus.fallback_text or "I don't have that in FPLBud's data."
+        text = _restore_player_mentions(
+            draft.strip(),
+            user_text=corpus.user_text,
+            names=corpus.names,
+        )
+        text = text or corpus.fallback_text or "I don't have that in FPLBud's data."
         return Finalised(text=text, grounding="ok", citations=parse_markup(text), flags=[], repaired=False)
 
 
@@ -378,6 +501,7 @@ class GroundingFinaliser:
         from fplcore.chat.types import Message
 
         directory = {**corpus.names, **self.names}
+        draft = _restore_player_mentions(draft, user_text=corpus.user_text, names=directory)
         report = grounding_check(draft, corpus, names_by_id=directory)
         if report.ok or (not report.hard_fail and not _needs_repair(report)):
             return Finalised(

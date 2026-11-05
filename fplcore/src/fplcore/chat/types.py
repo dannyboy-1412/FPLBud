@@ -206,3 +206,4 @@ class Corpus:
     canary: str = ""
     fallback_text: str = ""
     prompt_text: str = ""
+    user_text: str = ""

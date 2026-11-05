@@ -18,8 +18,8 @@ from psycopg_pool import ConnectionPool
 
 from api.chat.context import build_context
 from api.chat.history import prompt_messages, rows_for_round
-from api.services import refresh_published_squad
 from api.chat.tools import build_registry
+from api.services import refresh_published_squad
 from fplcore import constants
 from fplcore.chat.events import (
     ChatEvent,

@@ -21,9 +21,21 @@ export function DeadlineClock({ iso }: { iso: string }) {
       setWarn(new Date(iso).getTime() - Date.now() < 86_400_000);
     };
     tick();
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
+    let intervalId = 0;
+    const timeoutId = window.setTimeout(() => {
+      tick();
+      intervalId = window.setInterval(tick, 60_000);
+    }, 60_000 - (Date.now() % 60_000));
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
   }, [iso]);
-  if (!clock) return null;
-  return <span className={`block mt-1.5 nums ${warn ? "text-vermilion-ink" : ""}`}>{clock}</span>;
+  return (
+    <span className={`masthead-clock nums${warn ? " is-warn" : ""}`}>
+      <span className="masthead-clock-sep"> · </span>
+      <span className="masthead-clock-prefix">Deadline in </span>
+      {clock || "\u00a0"}
+    </span>
+  );
 }

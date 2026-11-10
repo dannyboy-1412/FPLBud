@@ -9,7 +9,7 @@ from fplcore.chat.knowledge import TOPICS, explain
 from fplcore.chat.registry import BoundTool
 from fplcore.chat.types import ToolContext, ToolResult, failure
 
-TopicName = Literal["squad", "transfers", "hits", "chips", "deadlines", "prices"]
+TopicName = Literal["squad", "transfers", "hits", "chips", "deadlines", "prices", "projections"]
 
 
 class TopicArgs(BaseModel):
@@ -32,7 +32,10 @@ def _run(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
 
 explain_topic = BoundTool(
     name="explain_topic",
-    description="Official-style rules for squad, transfers, hits, chips, deadlines or prices. Quote this instead of guessing.",
+    description=(
+        "Official-style rules for squad, transfers, hits, chips, deadlines or prices, "
+        "and how FPLBud projects points. Quote this instead of guessing."
+    ),
     args_model=TopicArgs,
     handler=_run,
 )

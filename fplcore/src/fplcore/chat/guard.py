@@ -25,6 +25,10 @@ _GAMBLE = re.compile(
     re.IGNORECASE,
 )
 _CHIP = re.compile(r"\[\[([^\]]*)\]\]")
+_DATA_STAMP = re.compile(
+    r"\bdata as of \d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:UTC|Z|[+-]\d{2}:?\d{2})?\.?[ \t]*",
+    re.IGNORECASE,
+)
 _MEMBERSHIP_NAME = re.compile(
     r"\b(?:have|got|own)\s+(.+?)\s+in\s+my\s+(?:team|squad)\b",
     re.IGNORECASE,
@@ -168,6 +172,11 @@ def sanitise_tree(value: Any, *, name_limit: int = NAME_LIMIT) -> tuple[Any, boo
                 cleaned_dict[str(key)] = nested
         return cleaned_dict, suspected
     return value, False
+
+
+def drop_data_stamp(text: str) -> str:
+    """The clients print data_as_of under the answer, so a stamp in the prose is a duplicate."""
+    return _DATA_STAMP.sub("", text).strip()
 
 
 def parse_markup(text: str) -> list[Citation]:

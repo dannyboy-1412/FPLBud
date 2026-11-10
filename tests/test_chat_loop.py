@@ -72,6 +72,8 @@ async def test_answer_without_tools_streams_then_finishes() -> None:
     assert isinstance(final, LoopFinished)
     assert final.grounding == "ok"
     assert final.citations[0].player_id == 12
+    assert final.text == "Captain [[p:12|Haaland]]."
+    assert final.data_as_of == "2026-10-25T05:10:00Z"
     assert llm.tools_sent == [[]] or llm.tools_sent[0] == []
 
 

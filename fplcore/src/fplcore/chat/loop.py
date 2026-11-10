@@ -8,7 +8,13 @@ from time import monotonic
 from typing import Any, Protocol
 
 from fplcore.chat.events import ChatEvent, MessageDelta, StatusEvent, ToolEnd, ToolStart
-from fplcore.chat.guard import Finalised, IdentityFinaliser, fallback_from_results, parse_markup
+from fplcore.chat.guard import (
+    Finalised,
+    IdentityFinaliser,
+    drop_data_stamp,
+    fallback_from_results,
+    parse_markup,
+)
 from fplcore.chat.prefetch import prefetch_tool
 from fplcore.chat.prompt import FORCE_FINAL_INSTRUCTION, ContextView
 from fplcore.chat.registry import ToolRegistry
@@ -339,10 +345,11 @@ async def run_turn(
         )
     counters.usage.input_tokens += final.extra_input_tokens
     counters.usage.output_tokens += final.extra_output_tokens
+    text = drop_data_stamp(final.text) or final.text
     yield LoopFinished(
-        text=final.text,
+        text=text,
         grounding=final.grounding,
-        citations=final.citations or parse_markup(final.text),
+        citations=final.citations or parse_markup(text),
         tools_used=_tools_used(ran),
         data_as_of=_as_of([result for _, result in ran], context),
         flags=final.flags,

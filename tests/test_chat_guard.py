@@ -1,4 +1,10 @@
-from fplcore.chat.guard import fallback_from_results, grounding_check, input_check, sanitise_text
+from fplcore.chat.guard import (
+    drop_data_stamp,
+    fallback_from_results,
+    grounding_check,
+    input_check,
+    sanitise_text,
+)
 from fplcore.chat.types import Corpus, ToolResult
 
 
@@ -46,6 +52,18 @@ def test_missing_chip_uses_the_name_from_the_question() -> None:
     assert report.hard_fail is False
     kept = grounding_check("Captain [[p:12|Haaland]].", Corpus(player_ids={12}, names={12: "Haaland"}))
     assert "[[p:12|Haaland]]" in kept.text
+
+
+def test_data_stamp_is_left_to_the_footer() -> None:
+    mid_line = drop_data_stamp(
+        "Tavernier is next at a projected 5.99. Data as of 2026-11-09 19:49 UTC. You can ask about your XI."
+    )
+    assert mid_line == "Tavernier is next at a projected 5.99. You can ask about your XI."
+    own_paragraph = drop_data_stamp("I'd roll.\n\nData as of 2026-11-05T06:59:53.626170+00:00. Compare mids?")
+    assert own_paragraph == "I'd roll.\n\nCompare mids?"
+    assert drop_data_stamp("Roll the transfer.\n\nData as of 2026-11-09 19:49 UTC.") == "Roll the transfer."
+    stale = "FPLBud's data is stale (last refreshed yesterday), so check team news."
+    assert drop_data_stamp(stale) == stale
 
 
 def test_fallback_uses_only_tool_facts() -> None:

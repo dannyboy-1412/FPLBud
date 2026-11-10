@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-RULES_VERSION = "2026-27-a"
+RULES_VERSION = "2026-27-b"
 LAST_VERIFIED = "2026-10-12"
 
 TOPICS: dict[str, str] = {
@@ -35,6 +35,14 @@ TOPICS: dict[str, str] = {
     "prices": (
         "Prices are in tenths of a million internally and shown as £m to one decimal. "
         "Price-rise lists are pressure signals, not confirmed changes."
+    ),
+    "projections": (
+        "FPLBud scores each player on form, fixture difficulty (FDR blended with the opponent's recent xG), "
+        "home or away, expected goal involvement (xGI), value for money, minutes security and price trend. "
+        "Your weights in Settings blend those scores into one rating, which is turned into points per fixture. "
+        "That is scaled down by the chance of playing and is zero for a player with no minutes this season. "
+        "A blank gameweek projects zero and a double gameweek counts both fixtures. "
+        "It is a model estimate, not a prediction."
     ),
 }
 

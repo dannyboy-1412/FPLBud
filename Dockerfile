@@ -17,4 +17,5 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000
 # The venv is already synced in the image. `uv run` would rebuild the workspace
 # packages on every cold start and leave the port closed long enough for a 502.
-CMD ["/app/.venv/bin/uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# api.serve binds $PORT (8000 only if PORT is unset) and trusts forwarded headers.
+CMD ["/app/.venv/bin/python", "-m", "api.serve"]

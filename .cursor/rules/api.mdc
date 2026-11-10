@@ -16,6 +16,8 @@ Run it from the repo root:
 uv run --package api uvicorn api.main:app --reload --port 8000
 ```
 
+The image starts `python -m api.serve`. That binds `$PORT`, trusts Render's forwarded client address, and gives in-flight requests 25 seconds to finish on shutdown. Set `UVICORN_LIMIT_MAX_REQUESTS` to restart the process after that many requests. Leave it unset on the 512 MB instance.
+
 `api` depends on `fplcore` only (`api/pyproject.toml`). Do not import `ingest`. A manual queue drain is `python -m ingest.run drain`.
 
 ## Where it sits
@@ -38,7 +40,8 @@ Source root: `api/src/api/`.
 
 | Module | Responsibility |
 |---|---|
-| `main.py` | App factory, CORS, lifespan, `run()` on port 8000. |
+| `main.py` | App factory, CORS, lifespan, `run()` on port 8000 for local reload. |
+| `serve.py` | Container entrypoint. `$PORT`, proxy headers, graceful shutdown, optional request-cap restart. |
 | `auth.py` | `decode_access_token`, `current_user`, `optional_user`. |
 | `limiter.py` | slowapi key: a bearer token's last 24 characters, otherwise the client IP. |
 | `worker.py` | `process_one` claims one `agent_runs` row and calls `run_claimed`. `poll_loop` every `AGENT_POLL_INTERVAL_SECONDS` (5s). `kickoff` schedules one pass on the server loop so a response can return 202 first. Hourly `prune_retention`. |

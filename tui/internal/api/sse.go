@@ -75,9 +75,7 @@ func consume(line string, cur *protocol.Raw, data *[]string) {
 		field = line
 		value = ""
 	}
-	if strings.HasPrefix(value, " ") {
-		value = value[1:]
-	}
+	value = strings.TrimPrefix(value, " ")
 	switch field {
 	case "event":
 		cur.Name = strings.TrimSpace(value)

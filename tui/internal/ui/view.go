@@ -556,12 +556,7 @@ func wrapPlain(styled, plain string, width int) []string {
 	if width < 8 || runewidth.StringWidth(plain) <= width {
 		return []string{styled}
 	}
-	words := wrapWords(plain, width)
-	out := make([]string, len(words))
-	for i, word := range words {
-		out[i] = word
-	}
-	return out
+	return wrapWords(plain, width)
 }
 
 func wrapWords(text string, width int) []string {

@@ -25,6 +25,9 @@ htmlcov/
 coverage.xml
 # Generated OpenAPI types
 web/src/lib/api-types.ts
+# Go TUI
+tui/dist/
+
 # OS / editor
 .DS_Store
 Thumbs.db

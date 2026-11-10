@@ -65,6 +65,20 @@ jobs:
       - run: uv run pytest -q -m db
       - run: uv run pytest -q tests/test_chat_evals.py
 
+  tui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tui/go.mod
+      - run: go vet ./...
+      - run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - run: go test -race ./...
+
   chat-live:
     if: github.event_name == 'workflow_dispatch' && github.event.repository.fork == false
     runs-on: ubuntu-latest

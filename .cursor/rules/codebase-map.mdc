@@ -7,7 +7,7 @@ alwaysApply: true
 
 Fantasy Premier League assistant. A guest enters a public team ID and gets a next-gameweek plan. A signed-in user (Google via Supabase) saves a team, and a background agent writes plans for the next 1, 3 and 5 gameweeks.
 
-Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm app in `web/`. Domain logic lives in `fplcore`. `api` and `ingest` call it. Read `docs/ARCHITECTURE.md` before changing metrics, the optimiser, the agent, or auth.
+Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm app in `web/`. The terminal client is a Go module in `tui/`. Domain logic lives in `fplcore`. `api` and `ingest` call it. Read `docs/ARCHITECTURE.md` before changing metrics, the optimiser, the agent, or auth.
 
 ## Where to edit
 
@@ -21,6 +21,7 @@ Python is a uv workspace: `fplcore`, `api`, `ingest`. The UI is a separate pnpm 
 | Python tests | `tests/` at the repo root |
 | Frozen FPL API payloads | `samples/` |
 | One-off DB scripts | `scripts/` |
+| Terminal client | `tui/` |
 
 ## `fplcore` (`fplcore/src/fplcore/`)
 
@@ -58,9 +59,15 @@ Read `web/AGENTS.md` before using Next.js APIs.
 - `components/dashboard/` — signed-in dashboard and stats
 - `lib/api.ts` — FastAPI client; `lib/server/` — server data and actions; `lib/supabase/` — session
 
+## `tui/`
+
+Go module for the `fplbud` terminal client. Read `tui/AGENTS.md` before editing it. It is a thin client: Supabase for sign-in, FastAPI for chat, and no FPL or database access. The event contract is `contracts/chat/`.
+
 ```bash
 uv run pytest -q
 uv run --package api uvicorn api.main:app --reload --port 8000
 uv run python -m ingest.run bootstrap
 cd web && pnpm dev
+cd tui && go test ./...
+cd tui && go run ./cmd/fplbud
 ```

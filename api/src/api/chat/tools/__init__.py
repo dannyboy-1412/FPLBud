@@ -16,6 +16,7 @@ from api.chat.tools.my_team import get_my_team
 from api.chat.tools.plan import evaluate_transfers, get_plan_suggestions, run_transfer_optimiser
 from api.chat.tools.player import get_player
 from api.chat.tools.preference import save_preference
+from api.chat.tools.record import get_player_record
 from api.chat.tools.replacements import find_replacements
 from api.chat.tools.resolve import resolve_players
 from api.chat.tools.review import review_my_squad
@@ -48,6 +49,7 @@ def tool_set() -> list[BoundTool]:
         get_captain_options,
         get_best_lineup,
         review_my_squad,
+        get_player_record,
     ]
 
 

@@ -330,6 +330,29 @@ def upsert_element_history(conn: Connection, season_id: str, player_id: int, sum
                 for rnd, pts in round_points_from_history(summary.history)
             ],
         )
+        cur.executemany(
+            """
+            insert into player_match_points (
+              season_id, player_id, fixture_id, round, opponent_team, was_home, minutes, starts,
+              total_points, goals_scored, assists, clean_sheets, bonus
+            ) values (
+              %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+            )
+            on conflict (season_id, player_id, fixture_id) do update set
+              round = excluded.round, opponent_team = excluded.opponent_team, was_home = excluded.was_home,
+              minutes = excluded.minutes, starts = excluded.starts, total_points = excluded.total_points,
+              goals_scored = excluded.goals_scored, assists = excluded.assists,
+              clean_sheets = excluded.clean_sheets, bonus = excluded.bonus
+            """,
+            [
+                (
+                    season_id, player_id, row.fixture, row.round, row.opponent_team, row.was_home,
+                    row.minutes, row.starts, row.total_points, row.goals_scored, row.assists,
+                    row.clean_sheets, row.bonus,
+                )
+                for row in summary.history
+            ],
+        )
 
 
 def replace_metrics(conn: Connection, season_id: str, rows: list[MetricRow]) -> int:

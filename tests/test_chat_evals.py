@@ -15,10 +15,10 @@ def test_golden_sse_matches_the_framer() -> None:
 
 def test_case_set_covers_core_and_plans() -> None:
     cases = all_cases()
-    assert len(cases) == 46
+    assert len(cases) == 48
     assert sum(1 for case in cases if case["group"] == "core") == 25
     assert sum(1 for case in cases if case["group"] == "plans") == 15
-    assert sum(1 for case in cases if case["group"] == "tools") == 6
+    assert sum(1 for case in cases if case["group"] == "tools") == 8
 
 
 def test_scripted_cases_pass() -> None:

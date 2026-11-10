@@ -491,4 +491,35 @@ def all_cases() -> list[dict[str, Any]]:
             contains=["heuristic", "6.5"],
             group="tools",
         ),
+        _case(
+            "easy-fixtures",
+            "What is his record against easy fixtures?",
+            "Against easy fixtures he has 18 points, 6.0 points per appearance.",
+            [
+                _tool(
+                    "get_player_record",
+                    {
+                        "id": 12,
+                        "name": "Salah",
+                        "by_fdr": {"easy": {"points": 18, "points_per_appearance": 6.0, "matches": 3}},
+                    },
+                    {"player_id": 12},
+                )
+            ],
+            contains=["18 points", "6.0"],
+            group="tools",
+        ),
+        _case(
+            "captain-not-record",
+            "Who should I captain?",
+            "Captain Haaland. The margin is 1.2 points.",
+            [
+                _tool(
+                    "get_captain_options",
+                    {"options": [{"id": 13, "name": "Haaland"}], "captain_margin": 1.2},
+                )
+            ],
+            contains=["Haaland", "1.2"],
+            group="tools",
+        ),
     ]

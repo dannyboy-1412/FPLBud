@@ -184,5 +184,63 @@
       "6.5"
     ],
     "grounding": "ok"
+  },
+  {
+    "id": "easy-fixtures",
+    "group": "tools",
+    "question": "What is his record against easy fixtures?",
+    "answer": "Against easy fixtures he has 18 points, 6.0 points per appearance.",
+    "tools": [
+      {
+        "name": "get_player_record",
+        "arguments": {
+          "player_id": 12
+        },
+        "data": {
+          "id": 12,
+          "name": "Salah",
+          "by_fdr": {
+            "easy": {
+              "points": 18,
+              "points_per_appearance": 6.0,
+              "matches": 3
+            }
+          }
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "18 points",
+      "6.0"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "captain-not-record",
+    "group": "tools",
+    "question": "Who should I captain?",
+    "answer": "Captain Haaland. The margin is 1.2 points.",
+    "tools": [
+      {
+        "name": "get_captain_options",
+        "arguments": {},
+        "data": {
+          "options": [
+            {
+              "id": 13,
+              "name": "Haaland"
+            }
+          ],
+          "captain_margin": 1.2
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "Haaland",
+      "1.2"
+    ],
+    "grounding": "ok"
   }
 ]

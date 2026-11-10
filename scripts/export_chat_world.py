@@ -23,6 +23,7 @@ TABLES = (
     "players",
     "player_metrics",
     "player_gameweek_stats",
+    "player_match_points",
     "player_gw_points",
     "player_daily_snapshots",
     "data_versions",

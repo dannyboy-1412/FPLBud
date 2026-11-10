@@ -274,6 +274,37 @@ def player_names(conn: Connection, ids: list[int]) -> dict[int, str]:
     return {int(r["id"]): r["web_name"] for r in rows}
 
 
+def player_match_rows(
+    conn: Connection,
+    season: str,
+    player_id: int,
+    min_round: int | None = None,
+) -> list[dict[str, Any]]:
+    """One row per fixture, newest first. FDR is the player's side of the fixture."""
+    sql = """
+        select m.round,
+               opp.short_name as opponent,
+               m.was_home,
+               case when m.was_home then f.team_h_difficulty else f.team_a_difficulty end as fdr,
+               m.minutes,
+               m.total_points,
+               m.goals_scored,
+               m.assists,
+               m.clean_sheets,
+               m.bonus
+          from player_match_points m
+          join fixtures f on f.season_id = m.season_id and f.id = m.fixture_id
+          join teams opp on opp.season_id = m.season_id and opp.id = m.opponent_team
+         where m.season_id = %s and m.player_id = %s
+    """
+    params: list[Any] = [season, player_id]
+    if min_round is not None:
+        sql += " and m.round >= %s"
+        params.append(min_round)
+    sql += " order by m.round desc, m.fixture_id desc"
+    return [dict(row) for row in conn.execute(sql, params)]
+
+
 def player_round_points(
     conn: Connection, player_ids: list[int], rounds: list[int]
 ) -> dict[tuple[int, int], int]:

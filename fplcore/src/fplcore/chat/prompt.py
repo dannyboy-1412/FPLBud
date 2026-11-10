@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from fplcore.chat.knowledge import RULES_VERSION as RULES_VERSION
 
-PROMPT_VERSION = "2026-11-10d"
+PROMPT_VERSION = "2026-11-10e"
 
 SYSTEM_PROMPT = """\
 # ROLE
@@ -61,6 +61,7 @@ fails on budget, call find_replacements instead of trying more swaps.
 Replacement: find_replacements(out_player_id, horizon).
 Compare: compare_players(player_ids, horizon).
 One player: get_player(player_id, horizon).
+Past record, points vs easy or hard fixtures, home or away: get_player_record(player_id, last_n_gws).
 Search: search_players(query, horizon, sort).
 Names the MENTIONED line missed: resolve_players(names).
 Fixtures or who blanks: get_fixtures(view, gameweeks). view is team or ticker.

@@ -89,6 +89,7 @@ def public_rows() -> dict[str, list[dict[str, Any]]]:
         "players": players,
         "player_metrics": [_metric(int(row["id"])) for row in players],
         "player_gameweek_stats": [_match(int(row["id"]), int(row["team_id"])) for row in players[:15]],
+        "player_match_points": [_match_point(int(row["id"]), int(row["team_id"])) for row in players[:15]],
         "player_gw_points": [
             {"season_id": SEASON, "player_id": int(row["id"]), "round": 8, "total_points": 6}
             for row in players[:15]
@@ -286,6 +287,26 @@ def _match(player_id: int, team_id: int) -> dict[str, Any]:
         "selected": 100000,
         "transfers_balance": 100,
     }
+
+
+def _match_point(player_id: int, team_id: int) -> dict[str, Any]:
+    full = _match(player_id, team_id)
+    kept = (
+        "season_id",
+        "player_id",
+        "fixture_id",
+        "round",
+        "opponent_team",
+        "was_home",
+        "minutes",
+        "starts",
+        "total_points",
+        "goals_scored",
+        "assists",
+        "clean_sheets",
+        "bonus",
+    )
+    return {column: full[column] for column in kept}
 
 
 def _fixtures(deadline: datetime) -> list[dict[str, Any]]:

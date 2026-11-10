@@ -83,6 +83,7 @@ def test_prune_drops_rows_outside_windows() -> None:
     tool_sql = next(sql for sql, _ in conn.statements if "chat_tool_calls" in sql)
     assert "set result = null" in " ".join(tool_sql.split()).lower()
     assert counts["player_gameweek_stats"] == 1
+    assert "player_match_points" not in deletes
     agent_sql = next(sql for sql, _ in conn.statements if "delete from agent_runs" in " ".join(sql.split()).lower())
     assert "queued" in agent_sql
     assert "succeeded" in agent_sql

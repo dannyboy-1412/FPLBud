@@ -182,6 +182,26 @@ create table player_gw_points (
   foreign key (season_id, player_id) references players(season_id, id)
 );
 
+-- Season-long per-fixture record for chat. Not pruned. FDR is read from fixtures.
+create table player_match_points (
+  season_id     text not null,
+  player_id     integer not null,
+  fixture_id    integer not null,
+  round         smallint not null,
+  opponent_team smallint not null,
+  was_home      boolean not null,
+  minutes       smallint not null,
+  starts        smallint not null,
+  total_points  smallint not null,
+  goals_scored  smallint not null,
+  assists       smallint not null,
+  clean_sheets  smallint not null,
+  bonus         smallint not null,
+  primary key (season_id, player_id, fixture_id),
+  foreign key (season_id, player_id) references players(season_id, id)
+);
+create index player_match_points_player_idx on player_match_points (season_id, player_id);
+
 -- ---------- Precomputed metric components (written by the ingest job) ----------
 -- One row per player per *target* gameweek (the next GW, and later the next N).
 -- Raw values are kept for display; *_score columns are normalised to 0..1 within position.
@@ -452,6 +472,7 @@ alter table fixtures enable row level security;  alter table players enable row 
 alter table player_daily_snapshots enable row level security;
 alter table player_gameweek_stats enable row level security;
 alter table player_gw_points enable row level security;
+alter table player_match_points enable row level security;
 alter table player_metrics enable row level security;
 alter table entry_cache enable row level security; alter table ingest_runs enable row level security;
 alter table data_versions enable row level security;

@@ -86,7 +86,10 @@ def _float(value: object) -> float | None:
 
 get_player = BoundTool(
     name="get_player",
-    description="One player's price, status, news, recent points with xG and xA, and projections over 1 to 5 gameweeks.",
+    description=(
+        "One player's price, status, news, last few matches, and projections over 1 to 5 gameweeks. "
+        "Not a season record by fixture difficulty."
+    ),
     args_model=PlayerArgs,
     handler=_run,
 )

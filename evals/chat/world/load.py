@@ -37,6 +37,7 @@ PUBLIC_ORDER = (
     "players",
     "player_metrics",
     "player_gameweek_stats",
+    "player_match_points",
     "player_gw_points",
     "player_daily_snapshots",
     "ingest_runs",
@@ -69,6 +70,7 @@ def load_world(url: str | None = None, *, variant: str = "base") -> str:
         _run_script(conn, SCHEMA.read_text(encoding="utf-8"))
         _run_script(conn, GRANTS.read_text(encoding="utf-8"))
         rows = read_world()
+        _ensure_match_points(rows)
         for table in PUBLIC_ORDER:
             _insert(conn, table, rows[table])
         _set_sequences(conn)
@@ -204,6 +206,33 @@ def _seed_user(conn: Any) -> None:
         )
 
 
+_MATCH_POINT_COLUMNS = (
+    "season_id",
+    "player_id",
+    "fixture_id",
+    "round",
+    "opponent_team",
+    "was_home",
+    "minutes",
+    "starts",
+    "total_points",
+    "goals_scored",
+    "assists",
+    "clean_sheets",
+    "bonus",
+)
+
+
+def _ensure_match_points(rows: dict[str, list[dict[str, Any]]]) -> None:
+    """Frozen worlds exported before this table existed still load."""
+    if rows.get("player_match_points"):
+        return
+    rows["player_match_points"] = [
+        {column: row[column] for column in _MATCH_POINT_COLUMNS}
+        for row in rows.get("player_gameweek_stats", [])
+    ]
+
+
 def read_world() -> dict[str, list[dict[str, Any]]]:
     manifest = WORLD / "manifest.json"
     if not manifest.exists():
@@ -215,6 +244,8 @@ def read_world() -> dict[str, list[dict[str, Any]]]:
 
 
 def _insert(conn: Any, table: str, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
     columns = list(rows[0])
     placeholders = ", ".join(["%s"] * len(columns))
     sql = f"insert into {table} ({', '.join(columns)}) values ({placeholders})"

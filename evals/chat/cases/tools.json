@@ -1,0 +1,188 @@
+[
+  {
+    "id": "swap-worth-it",
+    "group": "tools",
+    "question": "Is that swap worth it over three gameweeks?",
+    "answer": "The move is worth it. The projected delta is 2.4 points.",
+    "tools": [
+      {
+        "name": "evaluate_transfers",
+        "arguments": {
+          "moves": [
+            {
+              "out_player_id": 4,
+              "in_player_id": 3
+            }
+          ],
+          "horizon": 3
+        },
+        "data": {
+          "verdict": "worth_it",
+          "total_delta": 2.4,
+          "hits": 0,
+          "net_after_hits": 2.4
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "worth it",
+      "2.4"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "two-moves-hit",
+    "group": "tools",
+    "question": "Should I make both moves with one free transfer?",
+    "answer": "That is one hit. Net after the hit is 1.5 points.",
+    "tools": [
+      {
+        "name": "evaluate_transfers",
+        "arguments": {
+          "moves": [
+            {
+              "out_player_id": 4,
+              "in_player_id": 3
+            },
+            {
+              "out_player_id": 8,
+              "in_player_id": 9
+            }
+          ],
+          "horizon": 3
+        },
+        "data": {
+          "hits": 1,
+          "hit_cost": 4,
+          "net_after_hits": 1.5,
+          "verdict": "marginal"
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "1.5"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "replace-none",
+    "group": "tools",
+    "question": "Who should replace Salah under 8?",
+    "answer": "Nothing is affordable inside that budget.",
+    "tools": [
+      {
+        "name": "find_replacements",
+        "arguments": {
+          "out_player_id": 12,
+          "horizon": 3,
+          "max_price_m": 8.0
+        },
+        "data": {
+          "budget_m": 8.0,
+          "players": [],
+          "note": "Fewer than 5 are affordable."
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "affordable"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "blanks-ticker",
+    "group": "tools",
+    "question": "Which clubs blank?",
+    "answer": "ARS and CHE have no match.",
+    "tools": [
+      {
+        "name": "get_fixtures",
+        "arguments": {
+          "view": "ticker"
+        },
+        "data": {
+          "blanks": {
+            "9": [
+              "ARS",
+              "CHE"
+            ]
+          },
+          "doubles": {},
+          "clubs": []
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "ARS",
+      "CHE"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "name-resolved",
+    "group": "tools",
+    "question": "Is Odegaard the same player?",
+    "answer": "Odegaard is the same player.",
+    "tools": [
+      {
+        "name": "resolve_players",
+        "arguments": {
+          "names": [
+            "Odegaard"
+          ]
+        },
+        "data": {
+          "matches": [
+            {
+              "id": 20,
+              "name": "Odegaard",
+              "team": "ARS"
+            }
+          ]
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "Odegaard"
+    ],
+    "grounding": "ok"
+  },
+  {
+    "id": "wildcard-gain",
+    "group": "tools",
+    "question": "When should I wildcard?",
+    "answer": "Chip timing is a heuristic. The expected gain is 6.5 points.",
+    "tools": [
+      {
+        "name": "get_plan_suggestions",
+        "arguments": {},
+        "data": {
+          "plans": [
+            {
+              "horizon": 5,
+              "chip_advice": [
+                {
+                  "chip": "wildcard",
+                  "expected_gain": 6.5,
+                  "recommend": "hold"
+                }
+              ]
+            }
+          ],
+          "chips_are_heuristic": true
+        },
+        "ok": true
+      }
+    ],
+    "contains": [
+      "heuristic",
+      "6.5"
+    ],
+    "grounding": "ok"
+  }
+]

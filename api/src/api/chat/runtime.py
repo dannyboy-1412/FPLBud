@@ -18,9 +18,11 @@ from psycopg_pool import ConnectionPool
 
 from api.chat.context import build_context
 from api.chat.history import prompt_messages, rows_for_round
+from api.chat.mentions import apply_mentions
 from api.chat.tools import build_registry
 from api.services import refresh_published_squad
 from fplcore import constants
+from fplcore.chat.cache import TurnCache, activate_cache, reset_cache
 from fplcore.chat.events import (
     ChatEvent,
     Citation,
@@ -69,6 +71,7 @@ class Prepared:
     text: str = ""
     messages: list[Message] = field(default_factory=list)
     view: Any = None
+    cache: TurnCache | None = None
     replay_text: str = ""
     citations: list[Any] = field(default_factory=list)
     tools_used: list[dict[str, str]] = field(default_factory=list)
@@ -254,29 +257,35 @@ class ChatRuntime:
                     tools_used=used,
                 )
             thread = chat_repo.get_thread(conn, thread_id, user_id) or {}
-            view = build_context(conn, user_id, now=datetime.now(UTC))
-            history = chat_repo.model_messages(conn, thread_id)
-            stored = thread.get("context") if isinstance(thread.get("context"), dict) else None
-            messages, _pinned, to_pin, update = prompt_messages(
-                canary=self.canary,
-                view=view,
-                stored_context=stored,
-                history_rows=history,
-                history_budget=self.settings.chat_history_token_budget,
-            )
-            if to_pin is not None:
-                write_context = chat_repo.replace_context if stored else chat_repo.pin_context
-                write_context(conn, thread_id, to_pin, view.data_version)
-            if update:
-                chat_repo.append_messages(
-                    conn,
-                    thread_id,
-                    int(claim["turn_id"]),
-                    [{"role": "system", "content": update}],
+            cache = TurnCache()
+            token = activate_cache(cache)
+            try:
+                view = build_context(conn, user_id, now=datetime.now(UTC))
+                history = chat_repo.model_messages(conn, thread_id)
+                stored = thread.get("context") if isinstance(thread.get("context"), dict) else None
+                messages, _pinned, to_pin, update = prompt_messages(
+                    canary=self.canary,
+                    view=view,
+                    stored_context=stored,
+                    history_rows=history,
+                    history_budget=self.settings.chat_history_token_budget,
                 )
-            _stamp_version(conn, int(claim["turn_id"]), view.data_version)
-            if not messages or messages[-1].role != "user" or messages[-1].content != text:
-                messages.append(Message(role="user", content=text))
+                if to_pin is not None:
+                    write_context = chat_repo.replace_context if stored else chat_repo.pin_context
+                    write_context(conn, thread_id, to_pin, view.data_version)
+                if update:
+                    chat_repo.append_messages(
+                        conn,
+                        thread_id,
+                        int(claim["turn_id"]),
+                        [{"role": "system", "content": update}],
+                    )
+                _stamp_version(conn, int(claim["turn_id"]), view.data_version)
+                if not messages or messages[-1].role != "user" or messages[-1].content != text:
+                    messages.append(Message(role="user", content=text))
+                apply_mentions(conn, text, view, messages)
+            finally:
+                reset_cache(token)
             return Prepared(
                 kind="start",
                 thread_id=thread_id,
@@ -287,6 +296,7 @@ class ChatRuntime:
                 text=text,
                 messages=messages,
                 view=view,
+                cache=cache,
                 data_as_of=view.data_as_of,
             )
 
@@ -530,6 +540,7 @@ def _stamp_version(conn: Any, turn_id: int, data_version: int | None) -> None:
 def _tool_context(prepared: Prepared, settings: Settings) -> ToolContext:
     view = prepared.view
     weights = getattr(view, "weights", None)
+    cache = prepared.cache or TurnCache(data_version=getattr(view, "data_version", None))
     return ToolContext(
         user_id=prepared.user_id,
         entry_id=None,
@@ -544,6 +555,7 @@ def _tool_context(prepared: Prepared, settings: Settings) -> ToolContext:
         onboarded=bool(view.has_team),
         thread_id=prepared.thread_id,
         optimiser_hourly_cap=settings.chat_user_optimiser_per_hour,
+        cache=cache,
     )
 
 

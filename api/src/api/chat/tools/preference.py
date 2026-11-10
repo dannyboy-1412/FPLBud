@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -8,7 +8,14 @@ from api.chat.tools.common import ok
 from fplcore.chat.registry import BoundTool
 from fplcore.chat.types import ToolContext, ToolResult, failure
 from fplcore.db import chat_repo
-from fplcore.db.chat_repo import MEMORY_KEYS
+
+PreferenceKey = Literal[
+    "risk_appetite",
+    "favourite_team",
+    "avoid_player_ids",
+    "prefers_differentials",
+    "notes_short",
+]
 
 _LABELS = {
     "risk_appetite": "Risk appetite",
@@ -21,14 +28,12 @@ _LABELS = {
 
 class PreferenceArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    key: str
+    key: PreferenceKey
     value: str = Field(max_length=80)
 
 
 def _run(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
     parsed = PreferenceArgs.model_validate(args.model_dump())
-    if parsed.key not in MEMORY_KEYS:
-        return failure("INVALID_ARGUMENT", "That is not a preference I can save.", hint=", ".join(sorted(MEMORY_KEYS)))
     thread_id = _thread(ctx)
     if thread_id is None:
         return failure("INTERNAL", "This question has no thread to attach the preference to.")

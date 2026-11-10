@@ -5,15 +5,20 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from api.chat.tools.captain import get_captain_options
 from api.chat.tools.compare import compare_players
 from api.chat.tools.fixtures import get_fixtures
 from api.chat.tools.gameweek import get_gameweek_context
 from api.chat.tools.insights import get_insights
+from api.chat.tools.lineup import get_best_lineup
 from api.chat.tools.market import get_market_movers
 from api.chat.tools.my_team import get_my_team
-from api.chat.tools.plan import evaluate_transfer, get_plan_suggestions, run_transfer_optimiser
+from api.chat.tools.plan import evaluate_transfers, get_plan_suggestions, run_transfer_optimiser
 from api.chat.tools.player import get_player
 from api.chat.tools.preference import save_preference
+from api.chat.tools.replacements import find_replacements
+from api.chat.tools.resolve import resolve_players
+from api.chat.tools.review import review_my_squad
 from api.chat.tools.rules import explain_topic
 from api.chat.tools.search import search_players
 from fplcore.chat.registry import BoundTool, ToolRegistry
@@ -36,8 +41,13 @@ def tool_set() -> list[BoundTool]:
         explain_topic,
         get_plan_suggestions,
         run_transfer_optimiser,
-        evaluate_transfer,
+        evaluate_transfers,
         save_preference,
+        resolve_players,
+        find_replacements,
+        get_captain_options,
+        get_best_lineup,
+        review_my_squad,
     ]
 
 

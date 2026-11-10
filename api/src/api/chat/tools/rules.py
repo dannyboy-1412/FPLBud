@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -9,10 +9,12 @@ from fplcore.chat.knowledge import TOPICS, explain
 from fplcore.chat.registry import BoundTool
 from fplcore.chat.types import ToolContext, ToolResult, failure
 
+TopicName = Literal["squad", "transfers", "hits", "chips", "deadlines", "prices"]
+
 
 class TopicArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    topic: str
+    topic: TopicName
 
 
 def _run(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
@@ -21,7 +23,7 @@ def _run(ctx: ToolContext, args: BaseModel, conn: Any) -> ToolResult:
     card = explain(parsed.topic)
     if card is None:
         return failure(
-            "UNKNOWN_TOPIC",
+            "INVALID_ARGUMENT",
             "No rule card for that topic.",
             hint="Topics: " + ", ".join(sorted(TOPICS)),
         )

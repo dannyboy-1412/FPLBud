@@ -162,6 +162,7 @@ class ToolContext:
     onboarded: bool = False
     thread_id: str = ""
     optimiser_hourly_cap: int = 20
+    cache: Any = None
 
 
 @dataclass

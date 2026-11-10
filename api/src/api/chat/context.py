@@ -12,6 +12,7 @@ from typing import Any, cast
 from psycopg import Connection
 
 from api.services import ranked_players
+from fplcore.chat.cache import current_cache
 from fplcore.chat.prompt import ContextView, SquadRow
 from fplcore.constants import DEFAULT_WEIGHTS, POSITION_SHORT
 from fplcore.db import chat_repo
@@ -54,7 +55,7 @@ def build_context(conn: Connection, user_id: str, *, now: datetime | None = None
     snapshot = chat_repo.latest_snapshot(conn, user_id)
     view.has_team = snapshot is not None
     if snapshot is not None:
-        _apply_snapshot(view, conn, snapshot, weights)
+        _apply_snapshot(view, conn, snapshot, weights, view.data_version)
     _apply_plan(view, conn, user_id)
     view.prefs = [f"{row['key']}={row['value']}" for row in chat_repo.list_memory(conn, user_id)]
     return view
@@ -132,6 +133,7 @@ def _apply_snapshot(
     conn: Connection,
     snapshot: dict[str, Any],
     weights: dict[str, float],
+    data_version: int | None,
 ) -> None:
     view.snapshot_id = int(snapshot["id"])
     view.snapshot_gw = int(snapshot["event"])
@@ -143,7 +145,7 @@ def _apply_snapshot(
     view.chips_used = _chip_names(snapshot.get("chips_used"))
     picks = list(snapshot.get("picks") or [])
     players = _players(conn, view.season_id, [int(pick["element"]) for pick in picks])
-    ranked = _projections(conn, weights)
+    ranked = _projections(conn, weights, data_version)
     starters: list[SquadRow] = []
     bench: list[SquadRow] = []
     for pick in sorted(picks, key=lambda item: int(item.get("position") or 99)):
@@ -227,7 +229,12 @@ def _players(conn: Connection, season_id: str, ids: list[int]) -> dict[int, dict
     return {int(cast(dict[str, Any], row)["id"]): cast(dict[str, Any], row) for row in rows}
 
 
-def _projections(conn: Connection, weights: dict[str, float]) -> dict[int, dict[str, Any]]:
+def _projections(
+    conn: Connection, weights: dict[str, float], data_version: int | None
+) -> dict[int, dict[str, Any]]:
+    cache = current_cache()
+    if cache is not None:
+        cache.data_version = data_version
     try:
         ranked = ranked_players(conn, weights=weights, horizon=1)
     except Exception:

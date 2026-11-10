@@ -15,9 +15,10 @@ def test_golden_sse_matches_the_framer() -> None:
 
 def test_case_set_covers_core_and_plans() -> None:
     cases = all_cases()
-    assert len(cases) == 40
+    assert len(cases) == 46
     assert sum(1 for case in cases if case["group"] == "core") == 25
     assert sum(1 for case in cases if case["group"] == "plans") == 15
+    assert sum(1 for case in cases if case["group"] == "tools") == 6
 
 
 def test_scripted_cases_pass() -> None:
@@ -35,3 +36,4 @@ def test_scripted_cases_pass() -> None:
     assert failures == []
     assert (ROOT / "evals" / "chat" / "cases" / "core.json").exists()
     assert (ROOT / "evals" / "chat" / "cases" / "plans.json").exists()
+    assert (ROOT / "evals" / "chat" / "cases" / "tools.json").exists()

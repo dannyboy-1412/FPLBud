@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from fplcore.chat.budget import estimate_tokens
+from fplcore.chat.cache import activate_cache, reset_cache
 from fplcore.chat.guard import sanitise_tree
 from fplcore.chat.types import (
     OPTIMISER_TOOL,
@@ -140,6 +141,9 @@ class ToolRegistry:
     def specs(self) -> list[dict[str, Any]]:
         return [openai_tool(self._tools[name]) for name in self._order]
 
+    def has(self, name: str) -> bool:
+        return name in self._tools
+
     def labels(self) -> dict[str, str]:
         return {name: self._tools[name].description.split(".")[0] for name in self._order}
 
@@ -166,8 +170,7 @@ class ToolRegistry:
         try:
             args = tool.args_model.model_validate(call.arguments)
         except ValidationError as exc:
-            message = exc.errors()[0]["msg"] if exc.errors() else "Invalid arguments."
-            return failure("INVALID_ARGUMENT", message, hint="Check the argument types and try once more.")
+            return _invalid(exc)
         key = call.name + "\n" + args.model_dump_json()
         async with self._flight_lock:
             prior = seen.get(key)
@@ -212,6 +215,7 @@ class ToolRegistry:
             with self._open_conn() as conn:
                 return tool.handler(ctx, args, conn)
 
+        token = activate_cache(ctx.cache) if ctx.cache is not None else None
         try:
             if name == OPTIMISER_TOOL:
                 async with self._optimiser, self._db_slots:
@@ -225,6 +229,9 @@ class ToolRegistry:
         except Exception:
             logger.exception("chat tool failed name=%s", name)
             return failure("INTERNAL", "The tool failed. Answer without it.", hint="Tell the user what is missing.")
+        finally:
+            if token is not None:
+                reset_cache(token)
         cleaned, suspected = sanitise_tree(raw.data)
         if isinstance(cleaned, dict):
             raw.data = cleaned
@@ -258,6 +265,14 @@ class ToolRegistry:
                 self._record_span(conn, payload)
         except Exception:
             logger.exception("chat span persist failed")
+
+
+def _invalid(exc: ValidationError) -> ToolResult:
+    err = exc.errors()[0] if exc.errors() else {}
+    message = str(err.get("msg") or "Invalid arguments.")
+    expected = (err.get("ctx") or {}).get("expected") if isinstance(err.get("ctx"), dict) else None
+    hint = f"Valid values: {expected}." if expected else "Check the argument types and try once more."
+    return failure("INVALID_ARGUMENT", message, hint=hint)
 
 
 def _memo(prior: ToolResult) -> ToolResult:

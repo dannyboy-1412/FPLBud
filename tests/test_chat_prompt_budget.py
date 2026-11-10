@@ -14,4 +14,4 @@ def test_tools_and_context_fit_under_the_turn_cap() -> None:
         parts.append(tool.description)
         parts.append(json.dumps(strict_schema(tool.args_model), sort_keys=True))
     assert estimate_tokens("\n".join(parts)) < ChatCfg().turn_input_token_cap
-    assert len(tool_set()) == 13
+    assert len(tool_set()) == 18

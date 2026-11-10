@@ -9,6 +9,7 @@ from typing import Any, Protocol
 
 from fplcore.chat.events import ChatEvent, MessageDelta, StatusEvent, ToolEnd, ToolStart
 from fplcore.chat.guard import Finalised, IdentityFinaliser, fallback_from_results, parse_markup
+from fplcore.chat.prefetch import prefetch_tool
 from fplcore.chat.prompt import FORCE_FINAL_INSTRUCTION, ContextView
 from fplcore.chat.registry import ToolRegistry
 from fplcore.chat.types import (
@@ -87,8 +88,13 @@ def tool_label(name: str, arguments: dict[str, Any] | None) -> str:
         "explain_topic": "Checking the rules",
         "get_plan_suggestions": "Reading your saved plan",
         "run_transfer_optimiser": "Running the optimiser",
-        "evaluate_transfer": "Checking that transfer",
+        "evaluate_transfers": "Checking that transfer",
         "save_preference": "Noting a preference",
+        "resolve_players": "Resolving names",
+        "find_replacements": "Finding replacements",
+        "get_captain_options": "Checking captain options",
+        "get_best_lineup": "Checking the lineup",
+        "review_my_squad": "Reviewing your squad",
     }
     label = labels.get(name, "Looking that up")
     if name == "get_player" and arguments:
@@ -205,6 +211,18 @@ async def run_turn(
     ran: list[tuple[ToolCall, ToolResult]] = []
     deadline = monotonic() + cfg.turn_timeout_s
     yield StatusEvent(phase="thinking")
+    async for event in _prefetch(
+        messages,
+        tools=tools,
+        ctx=ctx,
+        counters=counters,
+        seen=seen,
+        ran=ran,
+        on_round=on_round,
+        turn_id=turn_id,
+        cfg=cfg,
+    ):
+        yield event
     draft = ""
     failed: LoopFailed | None = None
     while counters.rounds < cfg.max_rounds:
@@ -346,9 +364,47 @@ def _shorten(text: str) -> str:
 
 def _question_text(messages: list[Message]) -> str:
     for message in reversed(messages):
-        if message.role == "user" and message.content != FORCE_FINAL_INSTRUCTION:
-            return message.content
+        if message.role != "user" or message.content == FORCE_FINAL_INSTRUCTION:
+            continue
+        if message.content.startswith("<context"):
+            continue
+        return message.content
     return ""
+
+
+async def _prefetch(
+    messages: list[Message],
+    *,
+    tools: ToolRegistry,
+    ctx: ToolContext,
+    counters: TurnCounters,
+    seen: dict[str, ToolResult],
+    ran: list[tuple[ToolCall, ToolResult]],
+    on_round: OnRound | None,
+    turn_id: int | None,
+    cfg: ChatCfg,
+) -> AsyncIterator[ChatEvent]:
+    name = prefetch_tool(_question_text(messages))
+    if name is None or not tools.has(name) or counters.tool_calls >= cfg.max_tool_calls:
+        return
+    call = ToolCall(id="prefetch-1", name=name, arguments={}, raw_arguments="{}")
+    yield StatusEvent(phase="tool")
+    yield ToolStart(call_id=call.id, name=call.name, label=tool_label(call.name, call.arguments))
+    result = await tools.execute(call, ctx, seen, counters, turn_id=turn_id, round_no=1)
+    ran.append((call, result))
+    yield ToolEnd(call_id=call.id, ok=result.ok, ms=result.duration_ms, summary=_summary(result))
+    assistant = Message(role="assistant", content="", tool_calls=[call])
+    tool_message = Message(
+        role="tool",
+        content=result.to_model_text(),
+        tool_call_id=call.id,
+        name=call.name,
+    )
+    messages.append(assistant)
+    messages.append(tool_message)
+    if on_round is not None:
+        await on_round(assistant, [tool_message])
+    yield StatusEvent(phase="thinking")
 
 
 def _corpus(

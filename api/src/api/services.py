@@ -9,6 +9,7 @@ from psycopg import Connection
 
 from fplcore.agent.queue import enqueue_run
 from fplcore.agent.runner import try_llm_cap
+from fplcore.chat.cache import current_cache, weights_key
 from fplcore.client import FplClient, FplNotFoundError
 from fplcore.constants import (
     DEFAULT_WEIGHTS,
@@ -383,6 +384,45 @@ def ranked_players(
     max_cost: int | None = None,
     horizon: int = 1,
 ) -> list[dict[str, Any]]:
+    cache = current_cache()
+    if cache is None:
+        return _ranked_query(
+            conn, weights=weights, position=position, team=team, max_cost=max_cost, horizon=horizon
+        )
+    key = (weights_key(weights), int(horizon), cache.data_version)
+    base = cache.ranked.get(key)
+    if base is None:
+        base = _ranked_query(conn, weights=weights, horizon=horizon)
+        cache.ranked[key] = base
+    if not position and not team and not max_cost:
+        return list(base)
+    return [row for row in base if _ranked_keep(row, position, team, max_cost)]
+
+
+def _ranked_keep(
+    row: dict[str, Any],
+    position: int | None,
+    team: int | None,
+    max_cost: int | None,
+) -> bool:
+    if position and int(row["position_id"]) != int(position):
+        return False
+    if team and int(row["team_id"]) != int(team):
+        return False
+    if max_cost and int(row["now_cost"]) > int(max_cost):
+        return False
+    return True
+
+
+def _ranked_query(
+    conn: Connection,
+    *,
+    weights: dict[str, float],
+    position: int | None = None,
+    team: int | None = None,
+    max_cost: int | None = None,
+    horizon: int = 1,
+) -> list[dict[str, Any]]:
     season = current_season_id(conn)
     next_gw = stats_repo.next_gw_id(conn, season)
     w = renormalise_weights(weights)
@@ -421,7 +461,11 @@ def ranked_players(
                 "status": row["status"],
                 "news": row["news"],
                 "chance_of_playing_next_round": row["chance_of_playing_next_round"],
+                "first_name": row["first_name"] or "",
+                "second_name": row["second_name"] or "",
+                "form": float(row["form"] or 0),
                 "scores": {},
+                "by_gw": [],
                 "proj": 0.0,
             },
         )
@@ -438,7 +482,7 @@ def ranked_players(
         if gw == next_gw:
             rec["scores"] = scores
         k = gw - next_gw + 1
-        rec["proj"] += projected_points(
+        points = projected_points(
             score=combined_score(scores, w),
             fixture_count=int(row["fixture_count"]),
             avail=float(row["availability"] if k == 1 else availability(
@@ -448,6 +492,20 @@ def ranked_players(
             )),
             minutes=playing_share(scores["minutes"], row.get("minutes")),
         )
+        rec["proj"] += points
+        rec["by_gw"].append(
+            {
+                "gw": gw,
+                "proj": round(points, 2),
+                "fixture_count": int(row["fixture_count"]),
+                "form": round(scores["form"], 3),
+                "fixture": round(scores["fixture"], 3),
+                "xgi": round(scores["xgi"], 3),
+                "minutes": round(scores["minutes"], 3),
+            }
+        )
+    for rec in grouped.values():
+        rec["by_gw"].sort(key=lambda item: int(item["gw"]))
     ranked = sorted(grouped.values(), key=lambda r: r["proj"], reverse=True)
     for i, rec in enumerate(ranked, start=1):
         rec["rank"] = i
@@ -493,6 +551,24 @@ def player_detail(conn: Connection, player_id: int) -> dict[str, Any] | None:
 
 
 def load_opt_players(conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float], horizon: int) -> list[PlayerOpt]:
+    cache = current_cache()
+    key: tuple[Any, ...] | None = None
+    if cache is not None:
+        picks = tuple(sorted(int(pick["element"]) for pick in snapshot.picks))
+        sells = tuple(sorted((str(name), int(price)) for name, price in snapshot.selling_prices.items()))
+        key = (weights_key(weights), int(horizon), cache.data_version, snapshot.season_id, picks, sells)
+        cached = cache.opt.get(key)
+        if cached is not None:
+            return cached
+    loaded = _load_opt_players(conn, snapshot, weights, horizon)
+    if cache is not None and key is not None:
+        cache.opt[key] = loaded
+    return loaded
+
+
+def _load_opt_players(
+    conn: Connection, snapshot: TeamSnapshot, weights: dict[str, float], horizon: int
+) -> list[PlayerOpt]:
     season = snapshot.season_id
     next_gw = stats_repo.next_gw_id(conn, season)
     current = {int(p["element"]) for p in snapshot.picks}

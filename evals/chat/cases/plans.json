@@ -105,15 +105,25 @@
     "answer": "That costs more than the selling price plus the bank.",
     "tools": [
       {
-        "name": "evaluate_transfer",
+        "name": "evaluate_transfers",
         "arguments": {
-          "out_player_id": 1,
-          "in_player_id": 13
+          "moves": [
+            {
+              "out_player_id": 1,
+              "in_player_id": 13
+            }
+          ],
+          "horizon": 1
         },
         "data": {
-          "legal": false,
-          "code": "BUDGET",
-          "message": "That costs more than the selling price plus the bank."
+          "moves": [
+            {
+              "legal": false,
+              "code": "BUDGET",
+              "message": "That costs more than the selling price plus the bank."
+            }
+          ],
+          "verdict": "not_worth_it"
         },
         "ok": true
       }
@@ -130,15 +140,25 @@
     "answer": "That transfer is legal.",
     "tools": [
       {
-        "name": "evaluate_transfer",
+        "name": "evaluate_transfers",
         "arguments": {
-          "out_player_id": 4,
-          "in_player_id": 3
+          "moves": [
+            {
+              "out_player_id": 4,
+              "in_player_id": 3
+            }
+          ],
+          "horizon": 1
         },
         "data": {
-          "legal": true,
-          "code": null,
-          "message": "Legal."
+          "moves": [
+            {
+              "legal": true,
+              "message": "Legal."
+            }
+          ],
+          "verdict": "worth_it",
+          "total_delta": 1.2
         },
         "ok": true
       }
@@ -354,15 +374,25 @@
     "answer": "That player cannot be transferred in.",
     "tools": [
       {
-        "name": "evaluate_transfer",
+        "name": "evaluate_transfers",
         "arguments": {
-          "out_player_id": 8,
-          "in_player_id": 40
+          "moves": [
+            {
+              "out_player_id": 8,
+              "in_player_id": 40
+            }
+          ],
+          "horizon": 1
         },
         "data": {
-          "legal": false,
-          "code": "CANNOT_TRANSACT",
-          "message": "That player cannot be transferred in."
+          "moves": [
+            {
+              "legal": false,
+              "code": "CANNOT_TRANSACT",
+              "message": "That player cannot be transferred in."
+            }
+          ],
+          "verdict": "not_worth_it"
         },
         "ok": true
       }

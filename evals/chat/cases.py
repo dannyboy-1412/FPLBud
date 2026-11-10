@@ -245,9 +245,18 @@ def all_cases() -> list[dict[str, Any]]:
             "That costs more than the selling price plus the bank.",
             [
                 _tool(
-                    "evaluate_transfer",
-                    {"legal": False, "code": "BUDGET", "message": "That costs more than the selling price plus the bank."},
-                    {"out_player_id": 1, "in_player_id": 13},
+                    "evaluate_transfers",
+                    {
+                        "moves": [
+                            {
+                                "legal": False,
+                                "code": "BUDGET",
+                                "message": "That costs more than the selling price plus the bank.",
+                            }
+                        ],
+                        "verdict": "not_worth_it",
+                    },
+                    {"moves": [{"out_player_id": 1, "in_player_id": 13}], "horizon": 1},
                 )
             ],
             contains=["selling price"],
@@ -259,9 +268,9 @@ def all_cases() -> list[dict[str, Any]]:
             "That transfer is legal.",
             [
                 _tool(
-                    "evaluate_transfer",
-                    {"legal": True, "code": None, "message": "Legal."},
-                    {"out_player_id": 4, "in_player_id": 3},
+                    "evaluate_transfers",
+                    {"moves": [{"legal": True, "message": "Legal."}], "verdict": "worth_it", "total_delta": 1.2},
+                    {"moves": [{"out_player_id": 4, "in_player_id": 3}], "horizon": 1},
                 )
             ],
             contains=["legal"],
@@ -368,12 +377,118 @@ def all_cases() -> list[dict[str, Any]]:
             "That player cannot be transferred in.",
             [
                 _tool(
-                    "evaluate_transfer",
-                    {"legal": False, "code": "CANNOT_TRANSACT", "message": "That player cannot be transferred in."},
-                    {"out_player_id": 8, "in_player_id": 40},
+                    "evaluate_transfers",
+                    {
+                        "moves": [
+                            {
+                                "legal": False,
+                                "code": "CANNOT_TRANSACT",
+                                "message": "That player cannot be transferred in.",
+                            }
+                        ],
+                        "verdict": "not_worth_it",
+                    },
+                    {"moves": [{"out_player_id": 8, "in_player_id": 40}], "horizon": 1},
                 )
             ],
             contains=["cannot be transferred"],
             group="plans",
+        ),
+        _case(
+            "swap-worth-it",
+            "Is that swap worth it over three gameweeks?",
+            "The move is worth it. The projected delta is 2.4 points.",
+            [
+                _tool(
+                    "evaluate_transfers",
+                    {"verdict": "worth_it", "total_delta": 2.4, "hits": 0, "net_after_hits": 2.4},
+                    {"moves": [{"out_player_id": 4, "in_player_id": 3}], "horizon": 3},
+                )
+            ],
+            contains=["worth it", "2.4"],
+            group="tools",
+        ),
+        _case(
+            "two-moves-hit",
+            "Should I make both moves with one free transfer?",
+            "That is one hit. Net after the hit is 1.5 points.",
+            [
+                _tool(
+                    "evaluate_transfers",
+                    {"hits": 1, "hit_cost": 4, "net_after_hits": 1.5, "verdict": "marginal"},
+                    {
+                        "moves": [
+                            {"out_player_id": 4, "in_player_id": 3},
+                            {"out_player_id": 8, "in_player_id": 9},
+                        ],
+                        "horizon": 3,
+                    },
+                )
+            ],
+            contains=["1.5"],
+            group="tools",
+        ),
+        _case(
+            "replace-none",
+            "Who should replace Salah under 8?",
+            "Nothing is affordable inside that budget.",
+            [
+                _tool(
+                    "find_replacements",
+                    {"budget_m": 8.0, "players": [], "note": "Fewer than 5 are affordable."},
+                    {"out_player_id": 12, "horizon": 3, "max_price_m": 8.0},
+                )
+            ],
+            contains=["affordable"],
+            group="tools",
+        ),
+        _case(
+            "blanks-ticker",
+            "Which clubs blank?",
+            "ARS and CHE have no match.",
+            [
+                _tool(
+                    "get_fixtures",
+                    {"blanks": {"9": ["ARS", "CHE"]}, "doubles": {}, "clubs": []},
+                    {"view": "ticker"},
+                )
+            ],
+            contains=["ARS", "CHE"],
+            group="tools",
+        ),
+        _case(
+            "name-resolved",
+            "Is Odegaard the same player?",
+            "Odegaard is the same player.",
+            [
+                _tool(
+                    "resolve_players",
+                    {"matches": [{"id": 20, "name": "Odegaard", "team": "ARS"}]},
+                    {"names": ["Odegaard"]},
+                )
+            ],
+            contains=["Odegaard"],
+            group="tools",
+        ),
+        _case(
+            "wildcard-gain",
+            "When should I wildcard?",
+            "Chip timing is a heuristic. The expected gain is 6.5 points.",
+            [
+                _tool(
+                    "get_plan_suggestions",
+                    {
+                        "plans": [
+                            {
+                                "horizon": 5,
+                                "chip_advice": [{"chip": "wildcard", "expected_gain": 6.5, "recommend": "hold"}],
+                            }
+                        ],
+                        "chips_are_heuristic": True,
+                    },
+                )
+            ],
+            contains=["heuristic", "6.5"],
+            group="tools",
         ),
     ]

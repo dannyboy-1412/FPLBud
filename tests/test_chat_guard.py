@@ -4,6 +4,7 @@ from fplcore.chat.guard import (
     grounding_check,
     input_check,
     sanitise_text,
+    speak_as_advice,
 )
 from fplcore.chat.types import Corpus, ToolResult
 
@@ -64,6 +65,18 @@ def test_data_stamp_is_left_to_the_footer() -> None:
     assert drop_data_stamp("Roll the transfer.\n\nData as of 2026-11-09 19:49 UTC.") == "Roll the transfer."
     stale = "FPLBud's data is stale (last refreshed yesterday), so check team news."
     assert drop_data_stamp(stale) == stale
+
+
+def test_answer_does_not_name_the_tool() -> None:
+    lineup = speak_as_advice(
+        "The lineup tool prefers Konsa by a small margin for GW11: 5.88 projected points, versus 5.46 for Manzambi."
+    )
+    assert lineup == "I'd go with Konsa by a small margin for GW11: 5.88 projected points, versus 5.46 for Manzambi."
+    cited = speak_as_advice("According to the captain tool, Haaland is the crowd pick.")
+    assert cited == "Haaland is the crowd pick."
+    assert "get_best_lineup" not in speak_as_advice("Checked with get_best_lineup.")
+    plain = "I'd start Konsa. His minutes projection is the risk."
+    assert speak_as_advice(plain) == plain
 
 
 def test_fallback_uses_only_tool_facts() -> None:

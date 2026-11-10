@@ -29,6 +29,18 @@ _DATA_STAMP = re.compile(
     r"\bdata as of \d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:UTC|Z|[+-]\d{2}:?\d{2})?\.?[ \t]*",
     re.IGNORECASE,
 )
+_TOOL_PREFERS = re.compile(
+    r"\b(?:the |fplbud's )?[a-z]+ tool prefers\b",
+    re.IGNORECASE,
+)
+_TOOL_CLAUSE = re.compile(
+    r"\b(?:according to |from )?(?:the |fplbud's )?[a-z]+ tool"
+    r"(?: says| suggests| recommends| shows| picks| gives| has)?\b,?",
+    re.IGNORECASE,
+)
+_SNAKE_TOOL = re.compile(
+    r"\b(?:get|evaluate|find|review|resolve|search|compare|explain|save|run)_[a-z0-9]+(?:_[a-z0-9]+)*\b"
+)
 _MEMBERSHIP_NAME = re.compile(
     r"\b(?:have|got|own)\s+(.+?)\s+in\s+my\s+(?:team|squad)\b",
     re.IGNORECASE,
@@ -177,6 +189,16 @@ def sanitise_tree(value: Any, *, name_limit: int = NAME_LIMIT) -> tuple[Any, boo
 def drop_data_stamp(text: str) -> str:
     """The clients print data_as_of under the answer, so a stamp in the prose is a duplicate."""
     return _DATA_STAMP.sub("", text).strip()
+
+
+def speak_as_advice(text: str) -> str:
+    """The sources list already names what was checked. The answer should not."""
+    rewritten = _TOOL_PREFERS.sub("I'd go with", text)
+    rewritten = _TOOL_CLAUSE.sub("", rewritten)
+    rewritten = _SNAKE_TOOL.sub("", rewritten)
+    rewritten = re.sub(r"[ \t]{2,}", " ", rewritten)
+    rewritten = re.sub(r" +([,.:])", r"\1", rewritten)
+    return rewritten.strip()
 
 
 def parse_markup(text: str) -> list[Citation]:
@@ -527,7 +549,7 @@ class GroundingFinaliser:
                 content=(
                     "Rewrite the answer using only the tool data already in the conversation. "
                     "Remove any claim you cannot point at. Keep [[p:ID|Name]] markup. "
-                    "Do not call tools."
+                    "Do not name a tool or say a tool prefers a player. Do not call tools."
                 ),
             ),
             Message(

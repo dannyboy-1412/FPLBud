@@ -14,6 +14,7 @@ from fplcore.chat.guard import (
     drop_data_stamp,
     fallback_from_results,
     parse_markup,
+    speak_as_advice,
 )
 from fplcore.chat.prefetch import prefetch_tool
 from fplcore.chat.prompt import FORCE_FINAL_INSTRUCTION, ContextView
@@ -345,7 +346,7 @@ async def run_turn(
         )
     counters.usage.input_tokens += final.extra_input_tokens
     counters.usage.output_tokens += final.extra_output_tokens
-    text = drop_data_stamp(final.text) or final.text
+    text = speak_as_advice(drop_data_stamp(final.text)) or final.text
     yield LoopFinished(
         text=text,
         grounding=final.grounding,

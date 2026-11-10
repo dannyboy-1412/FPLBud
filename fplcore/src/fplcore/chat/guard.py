@@ -30,7 +30,7 @@ _DATA_STAMP = re.compile(
     re.IGNORECASE,
 )
 _TOOL_PREFERS = re.compile(
-    r"\b(?:the |fplbud's )?[a-z]+ tool prefers\b",
+    r"\b(?:the |fplbud's )?([a-z]+) tool prefers\b",
     re.IGNORECASE,
 )
 _TOOL_CLAUSE = re.compile(
@@ -191,9 +191,18 @@ def drop_data_stamp(text: str) -> str:
     return _DATA_STAMP.sub("", text).strip()
 
 
+def _advice_verb(match: re.Match[str]) -> str:
+    kind = match.group(1).lower()
+    if kind in {"lineup", "squad"}:
+        return "Start"
+    if kind.startswith("captain"):
+        return "Captain"
+    return "I'd go with"
+
+
 def speak_as_advice(text: str) -> str:
     """The sources list already names what was checked. The answer should not."""
-    rewritten = _TOOL_PREFERS.sub("I'd go with", text)
+    rewritten = _TOOL_PREFERS.sub(_advice_verb, text)
     rewritten = _TOOL_CLAUSE.sub("", rewritten)
     rewritten = _SNAKE_TOOL.sub("", rewritten)
     rewritten = re.sub(r"[ \t]{2,}", " ", rewritten)

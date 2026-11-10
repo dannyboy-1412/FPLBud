@@ -3,10 +3,10 @@ from fplcore.chat.prompt import PROMPT_VERSION, SYSTEM_PROMPT, ContextView, Squa
 from fplcore.chat.types import Message, ToolCall
 
 
-def test_prompt_stays_inside_its_budget() -> None:
+def test_prompt_cannot_consume_the_turn() -> None:
+    """A ceiling for an accidental paste. Not a size to write the prompt down to."""
     assert PROMPT_VERSION
-    tokens = estimate_tokens(SYSTEM_PROMPT)
-    assert tokens < 1600
+    assert estimate_tokens(SYSTEM_PROMPT) < 8_000
 
 
 def test_old_tool_results_become_stubs() -> None:

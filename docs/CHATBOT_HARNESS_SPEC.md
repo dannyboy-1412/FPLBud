@@ -541,7 +541,7 @@ The catalog is a hypothesis. After the first eval run, check the confusion matri
 
 ## 7. System prompt skeleton
 
-Static, versioned (`PROMPT_VERSION = "2026-10-a"`, stored on every `chat_turns` row), kept short and sectioned, "right altitude": rules with reasons, a few canonical examples, no exhaustive if-else lists [S2]. It only grows when an eval failure shows a missing rule. Target ≤1,200 tokens excluding tool schemas.
+Static, versioned (`PROMPT_VERSION = "2026-10-a"`, stored on every `chat_turns` row), sectioned, "right altitude": rules with reasons, a few canonical examples, no exhaustive if-else lists [S2]. Answer quality outranks brevity. Add an instruction or an example when it changes what the user reads. The CI ceiling in `tests/test_chat_budget.py` only catches a runaway paste; it is not a size to write down to. The real limit is the turn input cap.
 
 ```text
 # ROLE
@@ -649,7 +649,7 @@ Rules: ids in every row; ≤15 squad rows; news text is **not** in the block exc
 
 | Item | Budget | Enforcement |
 |---|---|---|
-| Static prefix (tools+system) | ~6k | measured in CI; fails if +15% unreviewed (`tests/test_chat_prompt_budget.py`) |
+| Static prefix (tools+system) | under the 40k turn cap | `tests/test_chat_prompt_budget.py`. The system prompt itself has a high runaway ceiling in `tests/test_chat_budget.py`, not a brevity target. |
 | Context block | ≤1k | builder truncates flags (≤6), bench order kept |
 | History | 6k | §8.4 |
 | One tool result | 1.5k (hard 3k) | row limits per tool + `truncated`+`notes` |

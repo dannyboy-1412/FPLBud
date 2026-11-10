@@ -71,7 +71,7 @@ def test_answer_does_not_name_the_tool() -> None:
     lineup = speak_as_advice(
         "The lineup tool prefers Konsa by a small margin for GW11: 5.88 projected points, versus 5.46 for Manzambi."
     )
-    assert lineup == "I'd go with Konsa by a small margin for GW11: 5.88 projected points, versus 5.46 for Manzambi."
+    assert lineup == "Start Konsa by a small margin for GW11: 5.88 projected points, versus 5.46 for Manzambi."
     cited = speak_as_advice("According to the captain tool, Haaland is the crowd pick.")
     assert cited == "Haaland is the crowd pick."
     assert "get_best_lineup" not in speak_as_advice("Checked with get_best_lineup.")

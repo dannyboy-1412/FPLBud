@@ -1,5 +1,5 @@
+import { AttentionList } from "@/components/dashboard/stats/AttentionList";
 import { POSITIONS } from "@/components/dashboard/stats/format";
-import { ReturnCompare } from "@/components/dashboard/stats/ReturnCompare";
 import { StatTable } from "@/components/dashboard/stats/StatTable";
 import { PitchSwitcher, type PitchLineup } from "@/components/programme/PitchSwitcher";
 import type { PlayerRow, PublicTeam, SquadScoreNotes } from "@/lib/api";
@@ -29,6 +29,8 @@ export function ReportHeader({
 }
 
 const SCORE_FALLBACK = "How strong your starting 11 looks this week.";
+const SCORE_SCALE =
+  "Each starter is marked from 0, an ordinary player with a game, up to 10, a premium one. This is the average of the 11.";
 const EMPTY_NOTES: SquadScoreNotes = { added: [], short_of_10: [] };
 
 export function SquadScore({
@@ -50,10 +52,11 @@ export function SquadScore({
         <span>{scoreLabel(value)}</span>
         <span className="caption">/10</span>
       </p>
+      <p className="caption mt-3 max-w-xl">{SCORE_SCALE}</p>
       {explained ? (
         <ScoreNotes added={added} shortOfTen={shortOfTen} />
       ) : (
-        <p className="caption mt-3 max-w-xl">{reason?.trim() || SCORE_FALLBACK}</p>
+        <p className="mt-3 max-w-xl text-sm leading-relaxed">{reason?.trim() || SCORE_FALLBACK}</p>
       )}
     </div>
   );
@@ -62,7 +65,7 @@ export function SquadScore({
 function ScoreNotes({ added, shortOfTen }: { added: string[]; shortOfTen: string[] }) {
   const both = added.length > 0 && shortOfTen.length > 0;
   return (
-    <div className={`mt-5 grid gap-x-10 gap-y-6 ${both ? "max-w-2xl sm:grid-cols-2" : "max-w-xl"}`}>
+    <div className={`mt-5 grid gap-x-12 gap-y-6 ${both ? "max-w-3xl sm:grid-cols-2" : "max-w-xl"}`}>
       {added.length > 0 ? <ScoreNoteList title="Strong picks" items={added} mark="+" markClass="text-racing" /> : null}
       {shortOfTen.length > 0 ? (
         <ScoreNoteList title="Why it isn't a 10" items={shortOfTen} mark="–" markClass="text-ochre" />
@@ -85,9 +88,9 @@ function ScoreNoteList({
   return (
     <section aria-label={title}>
       <p className="kicker">{title}</p>
-      <ul className="mt-2 space-y-2">
+      <ul className="mt-2 space-y-3">
         {items.map((item) => (
-          <li key={item} className="flex gap-2 text-sm leading-snug">
+          <li key={item} className="flex gap-2 text-sm leading-relaxed">
             <span className={`${markClass} shrink-0 font-semibold`} aria-hidden="true">
               {mark}
             </span>
@@ -131,26 +134,14 @@ function TeamStats({ team, leaders }: { team: PublicTeam; leaders?: Record<numbe
     <>
       <div className="grid md:grid-cols-2 gap-x-12 gap-y-10 mt-10">
         <section>
-          <p className="kicker mb-3">Due a return</p>
-          <p className="caption mb-3">
-            Fewer goals and assists than their chances were worth. The points often catch up, so these are usually holds.
-          </p>
-          <ReturnCompare
-            players={team.underperforming}
-            direction="short"
-            empty="Nobody in the squad is clearly short of a return."
-          />
+          <p className="kicker mb-3">Sort out</p>
+          <p className="caption mb-3">A flag, too few starts, or a hard next three.</p>
+          <AttentionList players={team.sort_out} empty="Nobody in the squad needs a look this week." />
         </section>
         <section>
-          <p className="kicker mb-3">Running hot</p>
-          <p className="caption mb-3">
-            More goals and assists than their chances were worth. Fine to own. The extra points can cool off.
-          </p>
-          <ReturnCompare
-            players={team.overperforming}
-            direction="ahead"
-            empty="Nobody in the squad is clearly ahead of their chances."
-          />
+          <p className="kicker mb-3">Leave alone</p>
+          <p className="caption mb-3">No flag, starting most weeks, and an easy next three.</p>
+          <AttentionList players={team.leave_alone} empty="Nobody in the squad is secure through an easy run." />
         </section>
       </div>
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-x-12 gap-y-10 mt-10">

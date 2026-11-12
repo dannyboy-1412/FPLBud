@@ -142,6 +142,7 @@ def recent_aggregates(
                coalesce(sum(g.minutes), 0) as recent_minutes,
                coalesce(sum(g.total_points), 0) as recent_points,
                coalesce(sum(g.starts), 0) as recent_starts,
+               count(g.fixture_id) as recent_matches,
                coalesce(sum(g.bonus), 0) as recent_bonus,
                coalesce(sum(g.bps), 0) as recent_bps,
                coalesce(sum(g.defensive_contribution), 0) as recent_dc,
@@ -205,6 +206,26 @@ def next_event_fixtures(conn: Connection) -> dict[int, list[dict[str, Any]]]:
         by_team.setdefault(int(row["team_h"]), []).append(home)
         by_team.setdefault(int(row["team_a"]), []).append(away)
     return by_team
+
+
+def upcoming_fixtures_by_team(
+    conn: Connection, *, horizon: int = 3
+) -> tuple[list[int], dict[int, dict[int, list[dict[str, Any]]]]]:
+    """Next `horizon` gameweeks, grouped by team then gameweek. An empty week is a blank."""
+    season = current_season_id(conn)
+    start = next_gw_id(conn, season)
+    gameweeks = list(range(start, start + horizon))
+    by_team: dict[int, dict[int, list[dict[str, Any]]]] = {}
+    for row in fixtures_for(conn, season, gameweeks):
+        event = row.get("event")
+        if event is None:
+            continue
+        gw = int(event)
+        home = {"opponent": row["away_short"], "fdr": int(row["team_h_difficulty"]), "is_home": True}
+        away = {"opponent": row["home_short"], "fdr": int(row["team_a_difficulty"]), "is_home": False}
+        by_team.setdefault(int(row["team_h"]), {}).setdefault(gw, []).append(home)
+        by_team.setdefault(int(row["team_a"]), {}).setdefault(gw, []).append(away)
+    return gameweeks, by_team
 
 
 def fixtures_for(

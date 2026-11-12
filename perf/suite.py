@@ -64,21 +64,19 @@ from fplcore.optimise import (
     solve_for_transfers,
 )
 from fplcore.settings import Settings
+from fplcore.stats.attention import fixture_runs, squad_attention
 from fplcore.stats.insights import (
     bonus_leaders,
     defensive_leaders,
     differentials,
-    finishing_variance,
     in_form,
     set_piece_takers,
 )
 from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_transfers
 from fplcore.stats.report import (
-    overperforming_players,
     performing_players,
     projection_for_row,
     squad_score_for_xi,
-    underperforming_players,
     xi_expected_points,
     xi_projections,
 )
@@ -581,6 +579,20 @@ def _stats_jobs(world: World) -> list[Job]:
     starters = [world.rows_by_id[player_id] for player_id in world.starters]
     squad_cards = [world.rows_by_id[player_id] for player_id in world.squad_ids]
     count = len(cards)
+    run_weeks = [1, 2, 3]
+    runs_by_team = {
+        int(card["team_id"]): {
+            gw: [
+                {
+                    "opponent": "WOL",
+                    "fdr": 2 if int(card["team_id"]) % 2 == 0 else 5,
+                    "is_home": True,
+                }
+            ]
+            for gw in run_weeks
+        }
+        for card in cards
+    }
 
     def market() -> object:
         return (
@@ -593,7 +605,7 @@ def _stats_jobs(world: World) -> list[Job]:
     def insights() -> object:
         return (
             in_form(cards),
-            finishing_variance(cards),
+            fixture_runs(cards, gameweeks=run_weeks, fixtures_by_team=runs_by_team),
             differentials(cards),
             defensive_leaders(cards),
             bonus_leaders(cards),
@@ -628,8 +640,7 @@ def _stats_jobs(world: World) -> list[Job]:
             squad_score_for_xi(projections, field),
             xi_expected_points(world.starters, world.rows_by_id, DEFAULT_WEIGHTS),
             performing_players(cards, squad_ids),
-            underperforming_players(cards, squad_ids),
-            overperforming_players(cards, squad_ids),
+            squad_attention(cards, squad_ids, gameweeks=run_weeks, fixtures_by_team=runs_by_team),
         )
 
     return [
@@ -637,7 +648,7 @@ def _stats_jobs(world: World) -> list[Job]:
         _heavy(
             "insight_tables",
             "fplcore.stats.insights",
-            f"{count} players across form, variance, differentials, defence, bonus and set pieces",
+            f"{count} players across form, fixture runs, differentials, defence, bonus and set pieces",
             insights,
             "Pure-Python pass over every player. Profiled to see which table costs the most.",
             repeats=3,

@@ -201,8 +201,8 @@ export type PublicTeam = {
   squad_score: number;
   squad_score_reason: string;
   squad_score_notes: SquadScoreNotes;
-  underperforming: VarianceRow[];
-  overperforming: VarianceRow[];
+  sort_out: AttentionRow[];
+  leave_alone: AttentionRow[];
 };
 
 export type Meta = {
@@ -350,13 +350,9 @@ export type FormRow = StatPlayer & {
   xgi90: number;
 };
 
-export type VarianceRow = StatPlayer & {
-  goals: number;
-  assists: number;
-  xg: number;
-  xgi: number;
-  xgi_delta: number;
-  xg_delta: number;
+export type AttentionRow = StatPlayer & {
+  detail: string;
+  run: string;
 };
 
 export type DiffRow = StatPlayer & { proj: number };
@@ -387,8 +383,8 @@ export type SetPieceTeam = {
 
 export type InsightsStats = {
   in_form: FormRow[];
-  underperformers: VarianceRow[];
-  overperformers: VarianceRow[];
+  easy_runs: AttentionRow[];
+  hard_runs: AttentionRow[];
   differentials: DiffRow[];
   defensive: DefensiveRow[];
   bonus: BonusRow[];

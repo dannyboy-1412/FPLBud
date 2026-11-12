@@ -49,20 +49,18 @@ from fplcore.metrics.combine import (
 from fplcore.models import BootstrapStatic, Entry, EntryHistory, PicksPayload, TransferRow
 from fplcore.optimise import PlayerOpt, optimise_horizon
 from fplcore.settings import Settings
+from fplcore.stats.attention import apply_live_flags, fixture_runs, squad_attention
 from fplcore.stats.insights import (
     bonus_leaders,
     defensive_leaders,
     differentials,
-    finishing_variance,
     in_form,
     set_piece_takers,
 )
 from fplcore.stats.market import movers_24h, price_movers, price_pressure, top_transfers
 from fplcore.stats.report import (
     SquadScore,
-    overperforming_players,
     score_starting_xi,
-    underperforming_players,
     xi_element_ids,
 )
 from fplcore.stats.score_reason import request_squad_score_reason, squad_team_hash
@@ -270,9 +268,14 @@ def _finish_public_team(
     names = team_names if team_names is not None else team_short_names(conn)
     view["squad_players"] = with_pitch_details(view["squad_players"], names, stats_repo.next_event_fixtures(conn))
     squad_ids = {int(player["element"]) for player in snapshot.squad_players}
-    rows = stats_repo.current_player_rows(conn)
-    view["underperforming"] = underperforming_players(rows, squad_ids)
-    view["overperforming"] = overperforming_players(rows, squad_ids)
+    rows = apply_live_flags(stats_repo.current_player_rows(conn), view["squad_players"])
+    recent = {int(row["id"]): row for row in stats_repo.recent_aggregates(conn)}
+    gameweeks, fixtures = stats_repo.upcoming_fixtures_by_team(conn)
+    attention = squad_attention(
+        rows, squad_ids, recent=recent, gameweeks=gameweeks, fixtures_by_team=fixtures
+    )
+    view["sort_out"] = attention["sort_out"]
+    view["leave_alone"] = attention["leave_alone"]
     return view
 
 
@@ -712,15 +715,17 @@ def insights_payload(
     conn: Connection, *, weights: dict[str, float], position: int | None = None
 ) -> dict[str, Any]:
     players = stats_repo.current_player_rows(conn, position=position)
-    recent = stats_repo.recent_aggregates(conn, position=position)
+    recent_rows = stats_repo.recent_aggregates(conn, position=position)
+    recent = {int(row["id"]): row for row in recent_rows}
     ranked = ranked_players(conn, weights=weights, position=position, horizon=3)
-    variance = finishing_variance(players)
+    gameweeks, fixtures = stats_repo.upcoming_fixtures_by_team(conn)
+    runs = fixture_runs(players, recent=recent, gameweeks=gameweeks, fixtures_by_team=fixtures)
     return {
-        "in_form": in_form(recent),
-        "underperformers": variance["underperformers"],
-        "overperformers": variance["overperformers"],
+        "in_form": in_form(recent_rows),
+        "easy_runs": runs["easy"],
+        "hard_runs": runs["hard"],
         "differentials": differentials(ranked),
-        "defensive": defensive_leaders(recent),
+        "defensive": defensive_leaders(recent_rows),
         "bonus": bonus_leaders(players),
         "set_pieces": set_piece_takers(players) if position is None else [],
     }

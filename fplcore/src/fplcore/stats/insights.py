@@ -42,39 +42,6 @@ def in_form(
     return out
 
 
-def finishing_variance(
-    players: list[dict[str, Any]],
-    *,
-    min_minutes: int = INSIGHTS_MIN_MINUTES,
-    n: int = STATS_TOP_N,
-) -> dict[str, list[dict[str, Any]]]:
-    scored: list[dict[str, Any]] = []
-    for row in players:
-        if int(row.get("minutes") or 0) < min_minutes:
-            continue
-        goals = int(row["goals_scored"])
-        assists = int(row["assists"])
-        xgi = float(row["expected_goal_involvements"])
-        xg = float(row["expected_goals"])
-        involvements = goals + assists
-        scored.append(
-            player_card(
-                row,
-                {
-                    "goals": goals,
-                    "assists": assists,
-                    "xg": round(xg, 2),
-                    "xgi": round(xgi, 2),
-                    "xgi_delta": round(xgi - involvements, 2),
-                    "xg_delta": round(xg - goals, 2),
-                },
-            )
-        )
-    under = sorted(scored, key=lambda r: float(r["xgi_delta"]), reverse=True)[:n]
-    over = sorted(scored, key=lambda r: float(r["xgi_delta"]))[:n]
-    return {"underperformers": under, "overperformers": over}
-
-
 def differentials(
     ranked: list[dict[str, Any]],
     *,

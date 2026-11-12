@@ -21,6 +21,18 @@ export function PlayerCell({
   );
 }
 
+export function MetricBar({ value, max, label }: { value: number; max: number; label: string }) {
+  const width = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  return (
+    <span className="metric-bar">
+      <span className="metric-bar-track" aria-hidden>
+        <span style={{ width: `${width}%` }} />
+      </span>
+      <span className="nums">{label}</span>
+    </span>
+  );
+}
+
 export function StatTable({
   headers,
   rows,

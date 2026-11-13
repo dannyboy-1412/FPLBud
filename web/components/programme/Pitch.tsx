@@ -34,7 +34,7 @@ function kitFor(club: string | undefined) {
   return KITS[club.toUpperCase()] ?? PLAIN_KIT;
 }
 
-function Shirt({ club }: { club?: string }) {
+export function Shirt({ club }: { club?: string }) {
   const kit = kitFor(club);
   return (
     <svg className="pitch-shirt" width="36" height="32" viewBox="0 0 36 32" aria-hidden>

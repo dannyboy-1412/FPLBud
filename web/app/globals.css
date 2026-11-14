@@ -2198,10 +2198,8 @@ th.text-right .insight-sort { width: 100%; }
   line-height: 1.2;
 }
 .landing-step p { margin: 0; max-width: 36ch; }
-.landing-skeleton-title { height: 4.5rem; width: min(100%, 28rem); margin-bottom: 1rem; }
 .landing-skeleton-lede { height: 1.5rem; width: min(100%, 24rem); margin-bottom: 2rem; }
 .landing-skeleton-field { height: 4rem; width: min(100%, 28rem); }
-.landing-skeleton-pitch { height: 440px; border-radius: 18px; }
 
 @media (prefers-reduced-motion: no-preference) {
   .landing-out { animation: landing-leave 2.6s var(--ease) both; }
@@ -2232,5 +2230,4 @@ th.text-right .insight-sort { width: 100%; }
   .landing-steps::before { display: none; }
   .landing-step { border-top: 1px solid var(--rule); margin-top: 1.25rem; }
   .landing-step:first-child { margin-top: 0; }
-  .landing-skeleton-pitch { height: 360px; }
 }

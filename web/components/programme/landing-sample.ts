@@ -58,10 +58,10 @@ export const SAMPLE_XI: SamplePlayer[] = [
 export const SAMPLE_LINES = [
   ["Captain", "Palmer, projected 8.4 this week."],
   ["Transfer", "Pickford out, Raya in, worth 2.1 points over the next three."],
-  ["Bench", "Kelleher, Konsa, Gakpo and Marmoush, in that order."],
+  ["Bench", "Kelleher, Hall, Rogers and Marmoush, in that order."],
 ] as const;
 
 export const SAMPLE_CAPTION = "Example plan";
 
 export const SAMPLE_SUMMARY =
-  "Example plan. Palmer wears the captain armband, projected 8.4 this week. Pickford leaves and Raya arrives, worth 2.1 points over the next three. The bench is Kelleher, Konsa, Gakpo and Marmoush, in that order.";
+  "Example plan. Palmer wears the captain armband, projected 8.4 this week. Pickford leaves and Raya arrives, worth 2.1 points over the next three. The bench is Kelleher, Hall, Rogers and Marmoush, in that order.";

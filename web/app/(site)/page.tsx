@@ -7,6 +7,8 @@ import { type Profile } from "@/lib/api";
 import { getMe, loadMeta } from "@/lib/server/data";
 import { getSignedIn } from "@/lib/server/session";
 
+const PLAIN_HEADLINE = "Your XI, captain and transfer, worked out";
+
 const STEPS = [
   ["Import", "A public team ID. No FPL password. Free transfers and selling prices come from the public record."],
   ["Score", "Form, fixture difficulty, home games and expected goals and assists, ranked within position."],
@@ -15,27 +17,17 @@ const STEPS = [
 
 export default function LandingPage() {
   return (
-    <Suspense fallback={<LandingSkeleton />}>
-      <LandingBody />
-    </Suspense>
-  );
-}
-
-async function LandingBody() {
-  const signedIn = await getSignedIn();
-  const [profile, meta] = await Promise.all([
-    signedIn ? memberProfile() : Promise.resolve(null),
-    loadMeta().catch(() => null),
-  ]);
-  const event = meta?.next_event ?? meta?.current_event;
-
-  return (
     <div className="landing">
       <div className="landing-hero">
         <div className="landing-copy">
-          <h1>{event ? `Gameweek ${event.id}: your XI, captain and transfer` : "Your XI, captain and transfer, worked out"}</h1>
-          <p className="prose-body landing-lede">{lede(Boolean(signedIn), profile)}</p>
-          {signedIn ? <MemberAction profile={profile} /> : <GuestAction />}
+          <h1>
+            <Suspense fallback={PLAIN_HEADLINE}>
+              <GameweekHeadline />
+            </Suspense>
+          </h1>
+          <Suspense fallback={<LandingCopyFallback />}>
+            <LandingCopy />
+          </Suspense>
         </div>
         <LandingPitch />
       </div>
@@ -51,6 +43,24 @@ async function LandingBody() {
         </ol>
       </section>
     </div>
+  );
+}
+
+async function GameweekHeadline() {
+  const meta = await loadMeta().catch(() => null);
+  const event = meta?.next_event ?? meta?.current_event;
+  if (!event) return PLAIN_HEADLINE;
+  return `Gameweek ${event.id}: your XI, captain and transfer`;
+}
+
+async function LandingCopy() {
+  const signedIn = await getSignedIn();
+  const profile = signedIn ? await memberProfile() : null;
+  return (
+    <>
+      <p className="prose-body landing-lede">{lede(Boolean(signedIn), profile)}</p>
+      {signedIn ? <MemberAction profile={profile} /> : <GuestAction />}
+    </>
   );
 }
 
@@ -106,17 +116,11 @@ function MemberAction({ profile }: { profile: Profile | null }) {
   );
 }
 
-function LandingSkeleton() {
+function LandingCopyFallback() {
   return (
-    <div className="landing" aria-hidden>
-      <div className="landing-hero">
-        <div>
-          <div className="skeleton landing-skeleton-title" />
-          <div className="skeleton landing-skeleton-lede" />
-          <div className="skeleton landing-skeleton-field" />
-        </div>
-        <div className="skeleton landing-skeleton-pitch" />
-      </div>
+    <div aria-hidden="true">
+      <div className="skeleton landing-skeleton-lede" />
+      <div className="skeleton landing-skeleton-field" />
     </div>
   );
 }

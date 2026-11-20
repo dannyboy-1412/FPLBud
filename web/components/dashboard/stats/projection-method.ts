@@ -37,19 +37,25 @@ export type BlendShare = {
   pct: number;
 };
 
+function weightOrDefault(weights: Partial<Weights>, key: keyof Weights): number {
+  const raw = weights[key];
+  if (raw == null) return DEFAULT_BLEND[key];
+  const value = Math.max(Number(raw), 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function positiveWeights(weights: Partial<Weights> | null | undefined): Weights | null {
   if (!weights) return null;
   const next = { ...DEFAULT_BLEND };
   let total = 0;
   for (const key of BLEND_ORDER) {
-    const value = Math.max(Number(weights[key] ?? 0), 0);
-    next[key] = Number.isFinite(value) ? value : 0;
+    next[key] = weightOrDefault(weights, key);
     total += next[key];
   }
   return total > 0 ? next : null;
 }
 
-/** Shares of the blend, largest first, summing to 100. An empty set falls back to the defaults. */
+/** Shares of the blend, largest first, summing to 100. Missing keys keep the defaults; an all-zero set falls back to them. */
 export function blendShares(weights: Partial<Weights> | null | undefined): BlendShare[] {
   const source = positiveWeights(weights) ?? DEFAULT_BLEND;
   const total = BLEND_ORDER.reduce((sum, key) => sum + source[key], 0);

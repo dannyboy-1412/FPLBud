@@ -38,8 +38,9 @@ export function ProjectionMethod({
         How a projected point is made
       </h2>
       <p className="proj-lead">
-        The figures above are expected points for the next gameweek. One game, a full chance of playing and a
-        certain start puts a player between 1 and 7.
+        Projected-point leaders cover the next gameweek. Differentials total the next three, adding each
+        week&apos;s projection. One game, a full chance of playing and a certain start puts a player between 1
+        and 7.
       </p>
       <div className="proj-sum">
         <p className="proj-equation">

@@ -2099,6 +2099,174 @@ th.text-right .insight-sort { width: 100%; }
 }
 .insight-more:hover { color: var(--ink); }
 
+.proj-method {
+  min-width: 0;
+  max-width: 100%;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
+}
+.proj-title {
+  margin: 0;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.proj-lead {
+  max-width: 38rem;
+  margin: 10px 0 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.45;
+}
+.proj-sum {
+  width: fit-content;
+  max-width: 100%;
+}
+.proj-equation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.55rem;
+  margin: 22px 0 0;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: clamp(1.55rem, 2.7vw, 2.35rem);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.proj-op { color: var(--vermilion); }
+.proj-term { white-space: nowrap; }
+.proj-scale {
+  display: grid;
+  grid-template-columns: auto minmax(4rem, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  margin-top: 18px;
+}
+.proj-scale-num {
+  display: block;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.85rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+}
+.proj-scale-caption {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.proj-scale-end.is-end { text-align: right; }
+.proj-scale-track {
+  height: 2px;
+  background: linear-gradient(90deg, var(--rule), var(--ink));
+}
+.proj-scale-note {
+  margin: 10px 0 0;
+  font-family: var(--font-instrument), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+.proj-body {
+  display: grid;
+  gap: 32px;
+  margin-top: 32px;
+}
+@media (min-width: 860px) {
+  .proj-body {
+    grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+    gap: 56px;
+    align-items: start;
+  }
+}
+.proj-factors { margin: 0; }
+.proj-factors > div {
+  display: grid;
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 13px 0;
+  border-top: 1px solid var(--rule);
+}
+.proj-factors dt {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+.proj-factors dd {
+  margin: 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.02rem;
+  line-height: 1.4;
+}
+.proj-subhead {
+  margin: 0 0 14px;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.proj-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--paper-deep);
+}
+.proj-bar > span { display: block; min-width: 3px; }
+.proj-blend {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.proj-blend li {
+  display: grid;
+  grid-template-columns: 0.55rem minmax(7.5rem, 10.5rem) 2.75rem minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+}
+.proj-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.4rem;
+  border-radius: 99px;
+}
+.proj-name { font-size: 0.875rem; font-weight: 650; }
+.proj-pct {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: right;
+}
+.proj-desc {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.proj-aside {
+  max-width: 40rem;
+  margin: 14px 0 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+@media (max-width: 640px) {
+  .proj-factors > div { grid-template-columns: 1fr; gap: 2px; }
+  .proj-blend li { grid-template-columns: 0.55rem minmax(0, 1fr) auto; }
+  .proj-desc { grid-column: 2 / -1; }
+}
+
 .landing { margin-top: 12px; }
 .landing-hero {
   display: grid;

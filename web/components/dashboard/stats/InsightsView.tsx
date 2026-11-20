@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AttentionRow, InsightsStats, PlayerRow } from "@/lib/api";
 import { AttentionPanel } from "./AttentionPanel";
 import { InsightsBoards } from "./InsightsBoards";
@@ -17,6 +17,7 @@ export function InsightsView({
   leaders,
   insights,
   ownedIds,
+  children,
 }: {
   position: PositionId | undefined;
   board: BoardId;
@@ -26,6 +27,7 @@ export function InsightsView({
   leaders: Record<number, PlayerRow[]>;
   insights: InsightsStats;
   ownedIds: number[];
+  children?: ReactNode;
 }) {
   const [board, setBoard] = useState(initialBoard);
 
@@ -50,6 +52,7 @@ export function InsightsView({
         <LeadersCard leaders={leaders} ownedIds={ownedIds} position={position} />
         <InsightsBoards insights={insights} ownedIds={ownedIds} position={position} board={board} onBoard={chooseBoard} />
       </div>
+      {children}
     </div>
   );
 }

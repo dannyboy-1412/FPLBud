@@ -23,7 +23,19 @@ describe("blend shares", () => {
     expect(blendShares(null)).toEqual(blendShares(DEFAULT_BLEND));
   });
 
-  it("gives the whole blend to a single ingredient", () => {
-    expect(blendShares({ xgi: 1 })).toEqual([{ key: "xgi", pct: 100 }]);
+  it("gives the whole blend to a single ingredient when the others are zero", () => {
+    expect(
+      blendShares({ form: 0, fixture: 0, home: 0, xgi: 1, value: 0, minutes: 0, trend: 0 }),
+    ).toEqual([{ key: "xgi", pct: 100 }]);
+  });
+
+  it("fills a missing weight from the default and keeps an explicit zero", () => {
+    expect(blendShares({ form: 0 }).map((part) => [part.key, part.pct])).toEqual([
+      ["xgi", 35],
+      ["fixture", 25],
+      ["value", 15],
+      ["minutes", 15],
+      ["home", 10],
+    ]);
   });
 });

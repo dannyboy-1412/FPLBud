@@ -26,7 +26,7 @@ const BOARD_TABS: TabOption<BoardId>[] = [
 
 const BOARD_COPY: Record<BoardId, string> = {
   in_form: "Recent returns among players with enough minutes.",
-  differentials: "Under 10% owned, ranked with your weights.",
+  differentials: "Under 10% owned. Points are the next three gameweeks added together.",
   defensive: "How often they clear the FPL defensive-contribution threshold.",
   bonus: "Season bonus, bonus points per 90, and bonus per start.",
   set_pieces: "Penalty, corner and direct free-kick order.",

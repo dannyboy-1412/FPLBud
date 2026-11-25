@@ -8,6 +8,7 @@ import { PromptChips } from "@/components/chat/EmptyBriefing";
 import { ThreadRail } from "@/components/chat/ThreadRail";
 import type { BriefingSquad } from "@/components/chat/briefing";
 import {
+  applyThreadTitle,
   emptyTurn,
   plainChatText,
   pushSse,
@@ -19,6 +20,7 @@ import {
   type StoredMessage,
   type StoredThread,
 } from "@/lib/chat";
+import { readChatThreadTitle } from "@/lib/server/actions";
 
 const RAIL_KEY = "fplbud.chat.rail";
 
@@ -63,6 +65,7 @@ export function ChatWorkspace({
   const closeRef = useRef<() => void>(() => {});
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const usageRef = useRef(usage);
+  const titleWatch = useRef(new Map<string, () => void>());
 
   useLayoutEffect(() => {
     const page = document.querySelector(".page");
@@ -109,7 +112,13 @@ export function ChatWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      for (const stop of titleWatch.current.values()) stop();
+    },
+    [],
+  );
 
   function stop() {
     if (!busyRef.current) return;
@@ -238,16 +247,38 @@ export function ChatWorkspace({
   function touchThread(id: string, question: string, startedWithoutThread: boolean) {
     setThreadId(id);
     if (startedWithoutThread) rememberThread(id);
+    const existing = notebook.find((item) => item.id === id);
     setNotebook((current) => {
-      const existing = current.find((item) => item.id === id);
+      const prior = current.find((item) => item.id === id);
       const next: StoredThread = {
         id,
-        title: existing?.title ?? question.slice(0, 60),
-        message_count: (existing?.message_count ?? 0) + 1,
+        title: prior?.title ?? question.slice(0, 60),
+        message_count: (prior?.message_count ?? 0) + 1,
         updated_at: new Date().toISOString(),
       };
       return [next, ...current.filter((item) => item.id !== id)];
     });
+    if (!existing?.title?.trim()) watchTitle(id);
+  }
+
+  function watchTitle(id: string) {
+    titleWatch.current.get(id)?.();
+    let stopped = false;
+    const timers = [1200, 3000, 6000, 10000].map((delay) =>
+      window.setTimeout(() => {
+        if (stopped) return;
+        void readChatThreadTitle(id).then((title) => {
+          if (stopped || !title) return;
+          setNotebook((current) => applyThreadTitle(current, id, title));
+        });
+      }, delay),
+    );
+    const stop = () => {
+      stopped = true;
+      for (const timer of timers) window.clearTimeout(timer);
+      titleWatch.current.delete(id);
+    };
+    titleWatch.current.set(id, stop);
   }
 
   function retry() {

@@ -131,7 +131,6 @@ def _wire(monkeypatch: pytest.MonkeyPatch, players: list[PlayerOpt], squad: list
 
 def _settings(**overrides: object) -> Settings:
     values = {
-        "llm_enabled": False,
         "llm_api_key": "test-key",
         "llm_model": "test/model",
         "llm_daily_call_cap": 200,
@@ -190,7 +189,7 @@ async def test_daily_cap_stores_projected_xi(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(services, "get_suggested_lineup", get)
     monkeypatch.setattr(services, "save_suggested_lineup", save)
     conn = _Conn(weights=None)
-    result = await services.build_suggested_xi(conn, _settings(llm_enabled=True), "user-1")
+    result = await services.build_suggested_xi(conn, _settings(), "user-1")
     assert result["source"] == "optimiser"
     assert "projected points" in result["summary"]
     assert stored == result

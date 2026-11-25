@@ -18,7 +18,6 @@ def test_grounding_rejects_invented_numbers() -> None:
 @pytest.mark.asyncio
 async def test_llm_fallback_on_invented_number() -> None:
     settings = Settings(
-        llm_enabled=True,
         llm_api_key="test",
         llm_model="test/model",
         llm_base_url="https://openrouter.ai/api/v1",
@@ -96,7 +95,6 @@ async def test_chat_with_search_sends_web_tool_and_parses_lineup() -> None:
 @respx.mock
 async def test_llm_timeout_falls_back() -> None:
     settings = Settings(
-        llm_enabled=True,
         llm_api_key="test",
         llm_model="test/model",
         llm_base_url="https://openrouter.ai/api/v1",
@@ -111,3 +109,27 @@ async def test_llm_timeout_falls_back() -> None:
     assert source == "template"
     assert texts["1"]
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_skipped_model_call_keeps_the_template_label() -> None:
+    from fplcore.agent.runner import _explanations
+
+    settings = Settings(
+        llm_api_key="test",
+        llm_model="test/model",
+        llm_base_url="https://openrouter.ai/api/v1",
+    )
+    results = {
+        "1": {
+            "horizon": 1,
+            "transfers": [],
+            "hits": 0,
+            "gain_vs_roll": 0,
+            "captain": {"web_name": "Haaland"},
+            "reason_codes": [],
+        }
+    }
+    texts, source = await _explanations(results, settings, allow_llm=False)
+    assert source == "template"
+    assert "Roll" in texts["1"]

@@ -35,7 +35,7 @@ class LLMExplainer:
 
     async def explain_run_async(self, results: dict[str, HorizonResult]) -> tuple[dict[str, str], str]:
         template = self.fallback.explain_run(results)
-        if not self.settings.llm_enabled:
+        if not self.settings.llm_api_key or not self.settings.llm_model:
             return template, "template"
         client = self.client or OpenRouterClient(self.settings)
         owns = self.client is None

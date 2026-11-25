@@ -390,7 +390,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[int, SolvedPlan]:
 
 
 def _settings() -> Settings:
-    return Settings(llm_enabled=False, llm_api_key="test-key", llm_model="test/model", llm_daily_call_cap=200)
+    return Settings(llm_api_key="test-key", llm_model="test/model", llm_daily_call_cap=200)
 
 
 async def test_the_model_sees_the_next_three_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:

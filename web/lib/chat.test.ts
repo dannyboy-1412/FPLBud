@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { bubbleFromStored, emptyTurn, messageFrom, plainChatText, pushSse, reduceTurn } from "./chat";
+import { applyThreadTitle, bubbleFromStored, emptyTurn, messageFrom, plainChatText, pushSse, reduceTurn } from "./chat";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const golden = readFileSync(join(here, "../../contracts/chat/sse/deadline.sse"), "utf8");
@@ -75,5 +75,18 @@ describe("chat sse", () => {
     expect(bubble.toolsUsed).toEqual([]);
     expect(bubble.dataAsOf).toBeNull();
     expect(plainChatText(bubble.text)).toBe("Captain Haaland.");
+  });
+
+  it("replaces a provisional thread title and leaves the others", () => {
+    const threads = [
+      { id: "a", title: "should i captain haaland", message_count: 1, updated_at: null },
+      { id: "b", title: "Bench order", message_count: 4, updated_at: null },
+    ];
+    expect(applyThreadTitle(threads, "a", " Haaland vs Salah Captaincy ")).toEqual([
+      { id: "a", title: "Haaland vs Salah Captaincy", message_count: 1, updated_at: null },
+      { id: "b", title: "Bench order", message_count: 4, updated_at: null },
+    ]);
+    expect(applyThreadTitle(threads, "a", "   ")).toBe(threads);
+    expect(applyThreadTitle(threads, "a", "should i captain haaland")).toBe(threads);
   });
 });

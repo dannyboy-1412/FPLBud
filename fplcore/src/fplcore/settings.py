@@ -54,13 +54,14 @@ class Settings(BaseSettings):
     agent_max_attempts: int = 3
     agent_tracking_window_days: int = 30
 
-    llm_enabled: bool = False
     llm_provider: str = "openrouter"
     llm_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("LLM_API_KEY", "OPENROUTER_API_KEY"),
     )
     llm_model: str = ""
+    llm_title_model: str = ""
+    llm_title_daily_cap: int = 50
     llm_base_url: str = "https://openrouter.ai/api/v1"
     llm_timeout_seconds: float = 10
     llm_lineup_timeout_seconds: float = 45
@@ -134,6 +135,10 @@ class Settings(BaseSettings):
     @property
     def resolved_chat_model(self) -> str:
         return CHAT_MODEL
+
+    @property
+    def resolved_title_model(self) -> str:
+        return self.llm_title_model or self.llm_model
 
     @property
     def resolved_chat_api_key(self) -> str:

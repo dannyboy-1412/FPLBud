@@ -19,5 +19,3 @@ services:
         value: http://localhost:3000,https://fplbud.vercel.app
       - key: INTERNAL_API_SECRET
         generateValue: true
-      - key: LLM_ENABLED
-        value: "false"

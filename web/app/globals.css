@@ -855,7 +855,8 @@ a.masthead-link[aria-current="page"] { color: var(--ink); text-decoration-color:
   .pitch-shirt { width: 30px; height: 26px; }
 }
 
-.page:has(.chat-workspace),
+/* Hidden route cache keeps .chat-workspace mounted with display:none. */
+.page:has(.chat-workspace:not([style*="display: none"])),
 .page--app {
   display: flex;
   flex-direction: column;
@@ -868,9 +869,9 @@ a.masthead-link[aria-current="page"] { color: var(--ink); text-decoration-color:
   padding-right: 0;
 }
 
-.page:has(.chat-workspace) > .masthead,
+.page:has(.chat-workspace:not([style*="display: none"])) > .masthead,
 .page--app > .masthead,
-.page:has(.chat-workspace) > .double-rule,
+.page:has(.chat-workspace:not([style*="display: none"])) > .double-rule,
 .page--app > .double-rule {
   flex-shrink: 0;
   margin-left: 24px;
@@ -878,9 +879,9 @@ a.masthead-link[aria-current="page"] { color: var(--ink); text-decoration-color:
 }
 
 @media (max-width: 479px) {
-  .page:has(.chat-workspace) > .masthead,
+  .page:has(.chat-workspace:not([style*="display: none"])) > .masthead,
   .page--app > .masthead,
-  .page:has(.chat-workspace) > .double-rule,
+  .page:has(.chat-workspace:not([style*="display: none"])) > .double-rule,
   .page--app > .double-rule {
     margin-left: 16px;
     margin-right: 16px;
@@ -888,16 +889,16 @@ a.masthead-link[aria-current="page"] { color: var(--ink); text-decoration-color:
 }
 
 @media (max-width: 339px) {
-  .page:has(.chat-workspace) > .masthead,
+  .page:has(.chat-workspace:not([style*="display: none"])) > .masthead,
   .page--app > .masthead,
-  .page:has(.chat-workspace) > .double-rule,
+  .page:has(.chat-workspace:not([style*="display: none"])) > .double-rule,
   .page--app > .double-rule {
     margin-left: 12px;
     margin-right: 12px;
   }
 }
 
-.page:has(.chat-workspace) > .double-rule,
+.page:has(.chat-workspace:not([style*="display: none"])) > .double-rule,
 .page--app > .double-rule {
   height: 0;
   border-top: 0;

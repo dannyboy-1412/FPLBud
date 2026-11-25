@@ -1,0 +1,10 @@
+---
+description: After a feature or fix, review the diff for security and unintended behavior changes
+alwaysApply: true
+---
+
+# Feature security review
+
+Before the final response on a task that added a feature, fixed a bug, or otherwise changed behavior, read and follow `.cursor/skills/feature-security-review/SKILL.md`.
+
+Skip when the task was a question, a review, or a plan with no behavior change, or when the only edits are formatting, comments, or docs. Skip when the user asks to skip the security review.

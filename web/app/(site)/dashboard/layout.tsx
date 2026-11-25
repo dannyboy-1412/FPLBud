@@ -1,5 +1,4 @@
 import { Suspense, type ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardSections } from "@/components/dashboard/DashboardSections";
 import { HeadingSkeleton } from "@/components/programme/Skeletons";
@@ -26,16 +25,11 @@ async function DashboardFrame({ children }: { children: ReactNode }) {
   if (!account.me.profile.fpl_entry_id) redirect("/onboarding");
   const { me, meta } = account;
   return (
-    <div className="matchday">
-      <div className="mb-6">
-        <p className="kicker">{meta?.next_event ? `Gameweek ${meta.next_event.id}` : "Dashboard"}</p>
-        <h1 className="mt-1">{me.profile.fpl_team_name ?? "Your team"}</h1>
-        <p className="mt-2">
-          <Link href="/chat" className="kicker">
-            Ask the assistant
-          </Link>
-        </p>
-      </div>
+    <div className="team-record-page">
+      <header className="team-record">
+        <h1>{me.profile.fpl_team_name ?? "Your team"}</h1>
+        {meta?.next_event ? <p className="team-record-when">Gameweek {meta.next_event.id}</p> : null}
+      </header>
       <DashboardSections />
       {children}
     </div>

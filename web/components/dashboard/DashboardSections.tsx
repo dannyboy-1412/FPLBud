@@ -64,7 +64,7 @@ export function DashboardSections() {
   const firstUnavailable = DASHBOARD_SECTIONS.findIndex((section) => !section.available);
 
   return (
-    <nav className="flex flex-wrap items-end gap-x-7 gap-y-3 border-b border-rule my-8" aria-label="Dashboard sections">
+    <nav className="flex flex-wrap items-end gap-x-7 gap-y-3 border-b border-rule my-8" aria-label="Team">
       {DASHBOARD_SECTIONS.map((section, index) => (
         <span key={section.id} className="contents">
           {index === firstUnavailable ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, use } from "react";
+import Link from "next/link";
 import { ArrowsLeftRight, CalendarBlank, Crown, FirstAid, Ticket } from "@phosphor-icons/react";
 import {
   GENERIC_PROMPTS,
@@ -67,6 +68,9 @@ function Greeting({ team, event }: { team: BriefingSquad | null; event: Briefing
       <p className="chat-brief-deadline" suppressHydrationWarning>
         {statusLine(team, event, now)}
       </p>
+      <Link href="/dashboard" className="chat-brief-record">
+        Open your team
+      </Link>
     </>
   );
 }

@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       });
       const saved = me.profile.fpl_entry_id;
       if (saved) {
-        dest = pendingId ? `/try/${saved}` : "/dashboard";
+        dest = pendingId ? `/try/${saved}` : "/chat";
       } else if (pendingId) {
         try {
           await api("/me/team", {

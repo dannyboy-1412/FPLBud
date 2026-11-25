@@ -310,3 +310,194 @@ def test_failure_helper_shape() -> None:
     text = result.to_model_text()
     assert '"ok":false' in text
     assert "NO_TEAM_SAVED" in text
+
+
+async def test_unknown_tool_and_invalid_arguments_record_spans() -> None:
+    from fplcore.chat.types import ToolCall, TurnCounters
+
+    spans: list[dict[str, Any]] = []
+    seen_calls: list[int] = []
+    registry = _registry(_echo_tool(seen_calls), record_span=lambda _conn, payload: spans.append(payload))
+    ctx = _ctx()
+    ctx.thread_id = "11111111-1111-1111-1111-111111111111"
+    memo: dict[str, ToolResult] = {}
+    counters = TurnCounters()
+
+    unknown = await registry.execute(
+        ToolCall(id="c1", name="hallucinated_tool", arguments={"x": 1}),
+        ctx,
+        memo,
+        counters,
+        turn_id=42,
+        round_no=1,
+        model="openai/gpt-6-luna",
+    )
+    unparsed = await registry.execute(
+        ToolCall(id="c2", name="get_player", arguments=None, raw_arguments="{bad", parse_error="Expecting value"),
+        ctx,
+        memo,
+        counters,
+        turn_id=42,
+        round_no=1,
+        model="openai/gpt-6-luna",
+    )
+    invalid = await registry.execute(
+        ToolCall(id="c3", name="get_player", arguments={"player_id": "nope"}),
+        ctx,
+        memo,
+        counters,
+        turn_id=42,
+        round_no=2,
+        model="openai/gpt-6-luna",
+    )
+
+    assert not unknown.ok and unknown.error and unknown.error.code == "UNKNOWN_TOOL"
+    assert not unparsed.ok and unparsed.error and unparsed.error.code == "INVALID_ARGUMENT"
+    assert not invalid.ok and invalid.error and invalid.error.code == "INVALID_ARGUMENT"
+    assert seen_calls == []
+    assert len(spans) == 3
+
+    assert spans[0]["name"] == "hallucinated_tool"
+    assert spans[0]["ok"] is False
+    assert spans[0]["error_code"] == "UNKNOWN_TOOL"
+    assert spans[0]["duration_ms"] == 0
+    assert spans[0]["cached"] is False
+    assert spans[0]["args"] == {"x": 1}
+    assert spans[0]["user_id"] == "user-1"
+    assert spans[0]["thread_id"] == "11111111-1111-1111-1111-111111111111"
+    assert spans[0]["model"] == "openai/gpt-6-luna"
+
+    assert spans[1]["name"] == "get_player"
+    assert spans[1]["ok"] is False
+    assert spans[1]["error_code"] == "INVALID_ARGUMENT"
+    assert spans[1]["duration_ms"] == 0
+    assert spans[1]["cached"] is False
+    assert spans[1]["args"] is None
+
+    assert spans[2]["name"] == "get_player"
+    assert spans[2]["ok"] is False
+    assert spans[2]["error_code"] == "INVALID_ARGUMENT"
+    assert spans[2]["duration_ms"] == 0
+    assert spans[2]["cached"] is False
+    assert spans[2]["args"] == {"player_id": "nope"}
+    assert spans[2]["round"] == 2
+
+
+async def test_memoised_duplicates_record_cached_spans() -> None:
+    spans: list[dict[str, Any]] = []
+    seen_calls: list[int] = []
+    registry = _registry(_echo_tool(seen_calls), record_span=lambda _conn, payload: spans.append(payload))
+    llm = ScriptedLlm(
+        [
+            tool_turn(
+                ("c1", "get_player", {"player_id": 12}),
+                ("c2", "get_player", {"player_id": 12}),
+                model="test-model",
+            ),
+            tool_turn(
+                ("c3", "get_player", {"player_id": 12}),
+                model="test-model",
+            ),
+            text_turn("Noted.", model="test-model"),
+        ]
+    )
+    events: list[object] = []
+    async for event in run_turn(
+        [],
+        llm=llm,
+        tools=registry,
+        cfg=ChatCfg(max_rounds=4, max_tool_calls=6, turn_timeout_s=30),
+        ctx=_ctx(),
+        context=ContextView(decision_gw=9, data_as_of="2026-10-25T05:10:00Z", names={12: "Haaland"}),
+        turn_id=7,
+    ):
+        events.append(event)
+
+    assert seen_calls == [12]
+    assert len(spans) == 3
+    assert [span["cached"] for span in spans] == [False, True, True]
+    assert all(span["ok"] is True for span in spans)
+    assert all(span["model"] == "test-model" for span in spans)
+    assert spans[1]["duration_ms"] == 0
+    assert spans[2]["duration_ms"] == 0
+
+
+def test_api_span_forwards_analytics_fields(monkeypatch: Any) -> None:
+    from api.chat.tools import _span
+    from fplcore.db import chat_repo
+    from fplcore.settings import Settings
+
+    recorded: list[dict[str, Any]] = []
+    monkeypatch.setattr(chat_repo, "record_tool_call", lambda _conn, **kwargs: recorded.append(kwargs))
+
+    recorder = _span(Settings(chat_store_tool_results=True))
+    recorder(
+        object(),
+        {
+            "turn_id": 9,
+            "user_id": "user-1",
+            "thread_id": "11111111-1111-1111-1111-111111111111",
+            "model": "openai/gpt-6-luna",
+            "round": 1,
+            "name": "get_player",
+            "args": {"player_id": 12},
+            "ok": True,
+            "error_code": None,
+            "cached": True,
+            "result_tokens": 20,
+            "result": {"ok": True},
+            "duration_ms": 0,
+        },
+    )
+    assert len(recorded) == 1
+    assert recorded[0]["user_id"] == "user-1"
+    assert recorded[0]["thread_id"] == "11111111-1111-1111-1111-111111111111"
+    assert recorded[0]["model"] == "openai/gpt-6-luna"
+    assert recorded[0]["cached"] is True
+    assert recorded[0]["duration_ms"] == 0
+
+
+async def test_concurrent_users_do_not_share_inflight_results() -> None:
+    import asyncio
+    import threading
+
+    from fplcore.chat.types import ToolCall, TurnCounters
+
+    barrier = threading.Barrier(2, timeout=2)
+    spans: list[dict[str, Any]] = []
+
+    def handler(ctx: ToolContext, args: BaseModel, conn: object) -> ToolResult:
+        del args, conn
+        barrier.wait()
+        return ToolResult(ok=True, data={"owner": ctx.user_id})
+
+    tool = BoundTool("get_my_team", "Read your squad.", _Empty, handler)
+    registry = _registry(tool, db_slots=2, record_span=lambda _conn, payload: spans.append(payload))
+    ctx_a = _ctx()
+    ctx_a.user_id = "user-a"
+    ctx_b = _ctx()
+    ctx_b.user_id = "user-b"
+
+    res_a, res_b = await asyncio.gather(
+        registry.execute(
+            ToolCall(id="c1", name="get_my_team", arguments={}),
+            ctx_a,
+            {},
+            TurnCounters(),
+            turn_id=1,
+            round_no=1,
+        ),
+        registry.execute(
+            ToolCall(id="c2", name="get_my_team", arguments={}),
+            ctx_b,
+            {},
+            TurnCounters(),
+            turn_id=2,
+            round_no=1,
+        ),
+    )
+
+    assert res_a.data == {"owner": "user-a"}
+    assert res_b.data == {"owner": "user-b"}
+    assert len(spans) == 2
+    assert all(span["cached"] is False for span in spans)

@@ -297,7 +297,15 @@ async def run_turn(
             yield ToolStart(call_id=call.id, name=call.name, label=tool_label(call.name, call.arguments))
         results = await asyncio.gather(
             *[
-                tools.execute(call, ctx, seen, counters, turn_id=turn_id, round_no=round_no)
+                tools.execute(
+                    call,
+                    ctx,
+                    seen,
+                    counters,
+                    turn_id=turn_id,
+                    round_no=round_no,
+                    model=turn.model or cfg.model or None,
+                )
                 for call in turn.tool_calls
             ]
         )
@@ -398,7 +406,15 @@ async def _prefetch(
     call = ToolCall(id="prefetch-1", name=name, arguments={}, raw_arguments="{}")
     yield StatusEvent(phase="tool")
     yield ToolStart(call_id=call.id, name=call.name, label=tool_label(call.name, call.arguments))
-    result = await tools.execute(call, ctx, seen, counters, turn_id=turn_id, round_no=1)
+    result = await tools.execute(
+        call,
+        ctx,
+        seen,
+        counters,
+        turn_id=turn_id,
+        round_no=1,
+        model=cfg.model or None,
+    )
     ran.append((call, result))
     yield ToolEnd(call_id=call.id, ok=result.ok, ms=result.duration_ms, summary=_summary(result))
     assistant = Message(role="assistant", content="", tool_calls=[call])

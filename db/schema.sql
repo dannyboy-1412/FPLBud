@@ -559,18 +559,39 @@ create index chat_turns_user_day_idx on chat_turns (user_id, started_at desc);
 
 create table chat_tool_calls (
   id            bigint generated always as identity primary key,
-  turn_id       bigint not null references chat_turns(id) on delete cascade,
+  turn_id       bigint references chat_turns(id) on delete set null,
+  user_id       uuid references auth.users(id) on delete cascade,
+  thread_id     uuid,
+  model         text,
   round         smallint not null,
   name          text not null,
   args          jsonb,
   ok            boolean not null,
   error_code    text,
+  cached        boolean not null default false,
   result_tokens integer,
   result        jsonb,
   duration_ms   integer,
   created_at    timestamptz not null default now()
 );
 create index chat_tool_calls_turn_idx on chat_tool_calls (turn_id);
+create index chat_tool_calls_user_idx on chat_tool_calls (user_id) where user_id is not null;
+create index chat_tool_calls_name_created_idx on chat_tool_calls (name, created_at);
+create index chat_tool_calls_created_name_idx on chat_tool_calls (created_at, name);
+
+create function fpl.scrub_orphaned_chat_tool_calls() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  update fpl.chat_tool_calls
+     set args = null, result = null
+   where turn_id = old.id
+     and (args is not null or result is not null);
+  return old;
+end;
+$$;
+create trigger chat_turns_scrub_tool_calls
+  before delete on chat_turns
+  for each row execute function fpl.scrub_orphaned_chat_tool_calls();
 
 create table chat_memory (
   user_id       uuid not null references auth.users(id) on delete cascade,

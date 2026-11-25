@@ -4,12 +4,14 @@ from fplcore.constants import (
     AGENT_RUN_KEEP_HOURS,
     CHAT_PROPOSAL_RETENTION_DAYS,
     CHAT_THREAD_RETENTION_DAYS,
+    CHAT_TRACE_RETENTION_DAYS,
     CHAT_USAGE_RETENTION_DAYS,
     ENTRY_CACHE_PRUNE_SECONDS,
     LOG_RETENTION_DAYS,
     MATCH_STATS_RETENTION_ROUNDS,
     METRIC_FORWARD_GWS,
 )
+from fplcore.db.chat_repo import count_optimiser_calls
 from fplcore.db.repos import prune_retention, retention_windows, round_points_from_history
 
 
@@ -80,10 +82,43 @@ def test_prune_drops_rows_outside_windows() -> None:
     assert deletes["chat_usage"] == [CHAT_USAGE_RETENTION_DAYS]
     assert deletes["chat_usage_global"] == [CHAT_USAGE_RETENTION_DAYS]
     assert deletes["chat_memory_proposals"] == [CHAT_PROPOSAL_RETENTION_DAYS]
-    tool_sql = next(sql for sql, _ in conn.statements if "chat_tool_calls" in sql)
-    assert "set result = null" in " ".join(tool_sql.split()).lower()
+    assert "chat_tool_calls" not in deletes
+    tool_updates = [
+        (index, " ".join(sql.split()).lower(), params)
+        for index, (sql, params) in enumerate(conn.statements)
+        if "update chat_tool_calls" in " ".join(sql.split()).lower()
+    ]
+    thread_delete_idx = next(
+        index
+        for index, (sql, _) in enumerate(conn.statements)
+        if "delete from chat_threads" in " ".join(sql.split()).lower()
+    )
+    assert len(tool_updates) == 2
+    scrub_idx, scrub_sql, scrub_params = tool_updates[0]
+    assert scrub_idx < thread_delete_idx
+    assert "set args = null, result = null" in scrub_sql
+    assert scrub_params == [CHAT_THREAD_RETENTION_DAYS]
+    _, trace_sql, trace_params = tool_updates[1]
+    assert "set result = null" in trace_sql
+    assert trace_params == [CHAT_TRACE_RETENTION_DAYS]
+    assert counts["chat_tool_calls_scrubbed"] == 1
     assert counts["player_gameweek_stats"] == 1
     assert "player_match_points" not in deletes
     agent_sql = next(sql for sql, _ in conn.statements if "delete from agent_runs" in " ".join(sql.split()).lower())
     assert "queued" in agent_sql
     assert "succeeded" in agent_sql
+
+
+def test_count_optimiser_calls_excludes_cached_and_rejected() -> None:
+    conn = _FakeConn(20)
+    conn.execute = lambda sql, params=None: (  # type: ignore[method-assign]
+        conn.statements.append((sql, list(params) if params is not None else None)) or _Result([{"n": 3}])
+    )
+    assert count_optimiser_calls(conn, "user-1", within_seconds=3600) == 3  # type: ignore[arg-type]
+    sql = " ".join(conn.statements[0][0].split()).lower()
+    assert "c.user_id = %s" in sql
+    assert "not c.cached" in sql
+    assert "invalid_argument" in sql
+    assert "unknown_tool" in sql
+    assert "rate_limited" in sql
+    assert "join chat_turns" not in sql

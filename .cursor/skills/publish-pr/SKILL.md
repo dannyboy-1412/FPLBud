@@ -1,15 +1,14 @@
 ---
-name: greptile-pr
+name: publish-pr
 description: >-
-  Publishes FPLBud changes on a new branch and a pull request, then asks
-  Greptile to review. Use when the user asks to push, ship, land, or publish
-  code changes, or to open a pull request. Do not push those commits straight
-  to main.
+  Publishes FPLBud changes on a new branch and a pull request. Use when the
+  user asks to push, ship, land, or publish code changes, or to open a pull
+  request. Do not push those commits straight to main.
 ---
 
-# Branch, pull request, Greptile
+# Branch and pull request
 
-New commits go out on a branch and a pull request against `main`. Greptile reviews pull requests. A push to `main` gives it nothing to comment on.
+New commits go out on a branch and a pull request against `main`.
 
 This repo's remote is `origin` (`dannyboy-1412/FPLBud`). The shell is PowerShell: chain commands with `;`, not `&&`. Pass commit messages and pull request bodies with a here-string.
 
@@ -53,7 +52,7 @@ Name the branch from the change, short and kebab-case (`insights-decision-board`
 
 Push with `git push -u origin HEAD`.
 
-If `gh pr view --json url` already returns a pull request for this branch, push the new commits and stop. Do not open a second pull request and do not comment again.
+If `gh pr view --json url` already returns a pull request for this branch, push the new commits and stop. Do not open a second pull request.
 
 Otherwise create one against `main`:
 
@@ -67,14 +66,6 @@ gh pr create --base main --title "the pr title" --body @"
 
 "@
 ```
-
-Then ask Greptile once, on the new pull request:
-
-```powershell
-gh pr comment --body "@greptileai"
-```
-
-`@greptileai` is the review request. One comment is enough. Later pushes to that branch rely on Greptile's new-push reviews. Comment again only when the user asks for another review.
 
 Return the pull request URL.
 

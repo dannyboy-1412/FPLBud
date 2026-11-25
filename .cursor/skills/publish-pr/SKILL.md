@@ -1,17 +1,16 @@
 ---
-name: greptile-pr
+name: publish-pr
 description: >-
-  Publishes FPLBud changes on a branch and a pull request, then asks Greptile
-  to review. The pull request is plain language: what changed, the security
-  analyst's remarks, and before-and-after screenshots only when the visual
-  change is large. Use when the user asks to push, ship, land, or publish
-  code changes, or to open a pull request. Do not push those commits straight
-  to main.
+  Publishes FPLBud changes on a branch and a pull request. The pull request
+  is plain language: what changed, the security analyst's remarks, and
+  before-and-after screenshots only when the visual change is large. Use
+  when the user asks to push, ship, land, or publish code changes, or to
+  open a pull request. Do not push those commits straight to main.
 ---
 
 # Publish a pull request
 
-New work goes on a branch and a pull request against `main`. Write the pull request for someone who has not seen the chat. Greptile reviews pull requests. A push straight to `main` gives it nothing to comment on.
+New work goes on a branch and a pull request against `main`. Write the pull request for someone who has not seen the chat. Do not push that work straight to `main`.
 
 The remote is `origin` (`dannyboy-1412/FPLBud`). The shell is PowerShell: chain commands with `;`.
 
@@ -29,7 +28,6 @@ Skip when there is nothing to publish, the user says to push to `main` or to ski
 2. Commit, on the right branch.
 3. Screenshots, only when the visual change is big.
 4. Push, then open or update the pull request.
-5. Ask Greptile once, and only when the pull request is new.
 
 ## Security review
 
@@ -80,7 +78,7 @@ One pair for the screen that changed. Add a second pair only when a different pa
 
 Push with `git push -u origin HEAD`.
 
-If `gh pr view --json url` already returns a pull request, push and update the body. Do not open another. Do not comment `@greptileai` again.
+If `gh pr view --json url` already returns a pull request, push and update the body. Do not open another.
 
 Write the body to a temp file. Use the same image path in the markdown and in `--attach`, so GitHub rewrites it to an uploaded URL.
 
@@ -119,14 +117,6 @@ Security review found no issues. Guest suggestions stay on the next gameweek, an
 Omit "Before and after" when there are no screenshots. Replace the security example with this change's real remarks.
 
 If this `gh` rejects `--attach`, publish the text. Say that the CLI cannot upload images, and where the files are. Do not commit them to invent a URL.
-
-On a new pull request, ask Greptile once:
-
-```powershell
-gh pr comment --body "@greptileai"
-```
-
-Later pushes use Greptile's review on the new push. Comment again only when the user asks.
 
 Return the pull request URL.
 

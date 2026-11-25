@@ -259,7 +259,7 @@ Streaming implementation notes: use `httpx` `client.stream("POST", ...)` (alread
 
 ### 5.3 Environment variables (additions to `.env.example` and `fplcore/settings.py`)
 
-Existing and reused: `LLM_PROVIDER` (default `openrouter`), `LLM_API_KEY` (alias `OPENROUTER_API_KEY`), `LLM_BASE_URL`, `LLM_ENABLED`. **Not reused:** `LLM_MODEL` (the existing features use it; chat gets its own so you can tune independently), `LLM_DAILY_CALL_CAP` (counts one call per request; a chat turn is 2-6 calls, and sharing the 200/day pool would starve suggested-XI).
+Existing and reused: `LLM_PROVIDER` (default `openrouter`), `LLM_API_KEY` (alias `OPENROUTER_API_KEY`), `LLM_BASE_URL`. **Not reused:** `LLM_MODEL` (the existing features use it; chat gets its own so you can tune independently), `LLM_DAILY_CALL_CAP` (counts one call per request; a chat turn is 2-6 calls, and sharing the 200/day pool would starve suggested-XI).
 
 | Variable | Default | Meaning |
 |---|---|---|

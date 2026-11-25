@@ -193,6 +193,24 @@ export async function deleteChatMemory(formData: FormData): Promise<void> {
   refresh();
 }
 
+const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function readChatThreadTitle(threadId: string): Promise<string | null> {
+  if (!THREAD_ID.test(threadId)) return null;
+  const token = await getAccessToken();
+  if (!token) return null;
+  try {
+    const body = await api<{ thread?: { title?: unknown } }>(`/chat/threads/${encodeURIComponent(threadId)}`, {
+      token,
+      cache: "no-store",
+    });
+    const title = body.thread?.title;
+    return typeof title === "string" ? title.trim() || null : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteChatThread(threadId: string): Promise<{ error?: string }> {
   const token = await getAccessToken();
   if (!token) return { error: "Sign in required." };

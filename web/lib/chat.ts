@@ -206,6 +206,14 @@ export function plainChatText(text: string): string {
   return text.replace(/\[\[p:\d+\|([^\]]+)\]\]/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1");
 }
 
+export function applyThreadTitle(threads: StoredThread[], id: string, title: string): StoredThread[] {
+  const next = title.trim();
+  if (!next) return threads;
+  const current = threads.find((thread) => thread.id === id);
+  if (!current || current.title === next) return threads;
+  return threads.map((thread) => (thread.id === id ? { ...thread, title: next } : thread));
+}
+
 export function threadFrom(value: unknown): StoredThread | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;

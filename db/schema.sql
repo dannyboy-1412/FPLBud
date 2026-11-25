@@ -410,6 +410,13 @@ create table llm_usage (
 );
 alter table llm_usage enable row level security;
 
+-- Chat thread titles. Separate from llm_usage so a title cannot spend that cap.
+create table llm_title_usage (
+  day           date primary key,
+  calls         integer not null default 0 check (calls >= 0)
+);
+alter table llm_title_usage enable row level security;
+
 -- OpenRouter sentence for a squad score. Keyed by the 15 players and their
 -- squad positions, so news and projection updates reuse the same sentence.
 create table squad_score_reasons (
@@ -493,6 +500,7 @@ create table chat_threads (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users(id) on delete cascade,
   title         text,
+  title_generated boolean not null default false,
   context       jsonb,
   context_data_version bigint,
   summary       text,

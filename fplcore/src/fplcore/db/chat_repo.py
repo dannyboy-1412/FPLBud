@@ -181,7 +181,7 @@ def claim_turn(
     locked = _one(
         conn,
         """
-        select id, title from chat_threads
+        select id, title, title_generated from chat_threads
          where id = %s and user_id = %s and archived_at is null
            for update
         """,
@@ -240,6 +240,7 @@ def claim_turn(
             user_message_id=int(existing["id"]),
             charge=False,
             title_seed=None,
+            name_thread=False,
         )
 
     return _open_turn(
@@ -257,6 +258,7 @@ def claim_turn(
         user_message_id=None,
         charge=True,
         title_seed=text,
+        name_thread=_untitled(locked),
     )
 
 
@@ -848,6 +850,7 @@ def _open_turn(
     user_message_id: int | None,
     charge: bool,
     title_seed: str | None,
+    name_thread: bool,
 ) -> dict[str, Any]:
     conn.execute("savepoint claim_turn")
     try:
@@ -878,6 +881,7 @@ def _open_turn(
             status="running",
             error_code=None,
         )
+        named = False
         if user_message_id is None:
             user_message_id = _insert_message(
                 conn,
@@ -897,6 +901,7 @@ def _open_turn(
                 """,
                 [title_seed or text, thread_id],
             )
+            named = name_thread
         else:
             conn.execute(
                 "update chat_messages set turn_id = %s where id = %s",
@@ -912,7 +917,55 @@ def _open_turn(
         "user_message_id": user_message_id,
         "turns_left": turns_left,
         "charged": charge,
+        "needs_title": named,
     }
+
+
+def claim_thread_title(conn: Connection, thread_id: str, user_id: str, source: str) -> bool:
+    """Take the one title slot while the thread still shows the truncated first message."""
+    row = conn.execute(
+        """
+        update chat_threads
+           set title_generated = true
+         where id = %s
+           and user_id = %s
+           and title_generated = false
+           and title = left(%s, 60)
+        returning id
+        """,
+        [thread_id, user_id, source],
+    ).fetchone()
+    return row is not None
+
+
+def set_generated_title(conn: Connection, thread_id: str, user_id: str, title: str) -> None:
+    conn.execute(
+        """
+        update chat_threads
+           set title = %s
+         where id = %s and user_id = %s and title_generated = true
+        """,
+        [title, thread_id, user_id],
+    )
+
+
+def try_title_cap(conn: Connection, cap: int) -> bool:
+    """Reserve one daily title call. A full day leaves the counter unchanged."""
+    row = conn.execute(
+        """
+        insert into llm_title_usage (day, calls) values (current_date, 1)
+        on conflict (day) do update
+          set calls = llm_title_usage.calls + 1
+          where llm_title_usage.calls < %s
+        returning calls
+        """,
+        [cap],
+    ).fetchone()
+    return row is not None
+
+
+def _untitled(locked: dict[str, Any]) -> bool:
+    return locked.get("title") is None and not bool(locked.get("title_generated"))
 
 
 def _release_claim(conn: Connection, *, rollback: bool) -> None:

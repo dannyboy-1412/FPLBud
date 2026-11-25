@@ -300,3 +300,34 @@ def test_heartbeat_while_quiet() -> None:
     chunks = asyncio.run(collect())
     assert any(chunk.startswith(": ping") for chunk in chunks)
     assert any(chunk.startswith("event: done") for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_prepare_does_not_wait_for_a_title(monkeypatch: pytest.MonkeyPatch) -> None:
+    release = asyncio.Event()
+    started = asyncio.Event()
+
+    async def hang(*_args: object, **_kwargs: object) -> None:
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(runtime_mod, "write_thread_title", hang)
+
+    def claim(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {**_start(), "needs_title": True}
+
+    runtime, _opens, _script = _wire(monkeypatch, claim)
+    prepared = await asyncio.wait_for(
+        runtime.prepare(
+            user_id="user-1",
+            thread_id=THREAD,
+            text="Who should I captain?",
+            client_msg_id="m1",
+            client="web",
+        ),
+        timeout=1,
+    )
+    assert getattr(prepared, "needs_title", False) is True
+    await asyncio.wait_for(started.wait(), timeout=1)
+    release.set()
+    await asyncio.gather(*runtime._title_tasks)

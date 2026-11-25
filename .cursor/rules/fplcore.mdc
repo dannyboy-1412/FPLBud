@@ -41,7 +41,7 @@ Source root: `fplcore/src/fplcore/`.
 | `agent/queue.py` | `enqueue_run`, `claim_run` (`FOR UPDATE SKIP LOCKED`), `fail_stale_runs`, `finish_run`. |
 | `agent/runner.py` | `run_claimed`: horizons 1, 3 and 5, chip advice, explanations, rewrite `agent_suggestions`. |
 | `agent/chips.py` | Rule thresholds for bench boost, triple captain, free hit, wildcard. |
-| `explain/` | `Explainer` protocol, `TemplateExplainer` (default), `LLMExplainer` (only when `LLM_ENABLED`), `get_explainer`. |
+| `explain/` | `Explainer` protocol, `TemplateExplainer` (default), `LLMExplainer` (when `LLM_API_KEY` and `LLM_MODEL` are set), `get_explainer`. |
 | `llm.py` | `OpenRouterClient` for lineup, transfer advice, squad-score sentences, and the explainer. `grounding_ok` checks numbers only. Chat answers are checked in `chat/guard.py`. |
 | `lineup.py` | Suggested XI for a saved squad. Model first; `lineup_from_optimiser` if the model is off or rejects the XI. |
 | `transfer_advice.py` | This-week transfer advice over horizon 3 with `max_hits=0`. Model may pick among legal optimiser plans; the rules in `advice_from_plans` are the fallback. |
@@ -73,7 +73,7 @@ Source root: `fplcore/src/fplcore/`.
 
 **Optimiser.** `optimise_horizon` prefilters outsiders to `PREFILTER_PER_POSITION` (40) by GW1 projection, always keeping the current squad. It solves `transfers_in` from 0 through `free_transfers + max_hits`. Later gameweeks score squad membership (`x_p`), discounted by `δ=0.85`. The XI, bench and captain are for GW1 only. `HORIZON_SETTINGS` for 1 / 3 / 5 set hit margin, roll value and default max hits (2.0/2.0/1, 1.0/1.0/1, 0.5/0.5/2). A hit is kept only when extra adjusted objective clears `4 + hit_margin`. `unlimited_transfers` (active chip wildcard or free hit) treats free transfers as 15. Other horizons use a fallback `HorizonSettings` (`hit_margin=1`, `max_hits_default=1`). `alternatives_per_count` (default 1) re-solves each transfer count with the previous incoming set forbidden. The result's `all` map is still the first solve per count, so the agent is unchanged. `alternatives` lists every solve.
 
-**Agent.** `enqueue_run` returns an existing queued or running row for that user and entry. On trigger `import` it also returns the latest succeeded run when snapshot, weights hash and `data_version` match. `claim_run` requeues runs stuck in `running` longer than `AGENT_JOB_TIMEOUT_SECONDS` (300s) until `AGENT_MAX_ATTEMPTS` (3), then marks them failed. `run_claimed` loads one set of `PlayerOpt` at horizon 5 and solves 1, 3 and 5. It deletes and reinserts `agent_suggestions` for that run. LLM explanations run only when `LLM_ENABLED` and the trigger is `import` or `user_rerun`, and only if `try_llm_cap` can increment `llm_usage` under `LLM_DAILY_CALL_CAP`. Otherwise the template is used.
+**Agent.** `enqueue_run` returns an existing queued or running row for that user and entry. On trigger `import` it also returns the latest succeeded run when snapshot, weights hash and `data_version` match. `claim_run` requeues runs stuck in `running` longer than `AGENT_JOB_TIMEOUT_SECONDS` (300s) until `AGENT_MAX_ATTEMPTS` (3), then marks them failed. `run_claimed` loads one set of `PlayerOpt` at horizon 5 and solves 1, 3 and 5. It deletes and reinserts `agent_suggestions` for that run. LLM explanations run on `import` and `user_rerun` when `LLM_API_KEY` and `LLM_MODEL` are set, and only if `try_llm_cap` can increment `llm_usage` under `LLM_DAILY_CALL_CAP`. Otherwise the template is used.
 
 **Chips (`advise_chips`).** Bench boost recommends when bench projection ≥ 12. Triple captain when captain projection ≥ 10. Free hit when a one-week unlimited solve gains ≥ 12 or 4+ squad players blank. Wildcard only at horizon 5, when gain ≥ 20. Horizon 1 collapses `consider_gw_*` to `play_now` or `hold`. `expires_soon` is true when `stop_event` is within 3 gameweeks. The bench-boost loops that look for a double gameweek are empty; that advice is the points threshold only.
 
@@ -97,7 +97,7 @@ HTTP routes, JWT checks, CORS, and slowapi limits belong in `api`. Cron decision
 - `claim_run` must stay `SKIP LOCKED`. Two workers (API loop and the GitHub Action) drain the same table.
 - `run_claimed` commits progress mid-run so polling sees stages, then commits suggestions and `finish_run` together on success. On exception it rolls back and still `finish_run(..., ok=False)`.
 - LLM output is checked against the input (`grounding_ok` checks numbers only, plus `LineupRejected` and `TransferRejected`). A failed or capped call keeps the deterministic text or plan. Chat uses `chat/guard.py`, not `grounding_ok`.
-- `OpenRouterClient` for lineup, transfers and squad-score copy is gated on `llm_api_key` and `llm_model`. Agent plan prose is gated on `llm_enabled` as well.
+- `OpenRouterClient` for lineup, transfers, squad-score copy, and agent plan prose is gated on `llm_api_key` and `llm_model`. Plan prose also waits for an `import` or `user_rerun`.
 - Retention windows live in `constants.py` (`METRIC_FORWARD_GWS=6`, match stats 8 rounds, daily snapshots 8 days, entry cache prune 600s, finished agent runs 24h except the latest success per user and entry, chat threads 90 days, tool results 14 days, chat usage 35 days). `prune_retention` is the only deleter.
 
 ## Tests

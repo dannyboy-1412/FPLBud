@@ -39,6 +39,7 @@ from fplcore.chat.loop import LoopFailed, LoopFinished, run_turn
 from fplcore.chat.model import OpenAICompatClient
 from fplcore.chat.prompt import PROMPT_VERSION, RULES_VERSION
 from fplcore.chat.registry import ToolRegistry
+from fplcore.chat.titles import write_thread_title
 from fplcore.chat.types import ChatCfg, Message, ToolContext, Usage
 from fplcore.db import chat_repo, pooled_connection
 from fplcore.settings import Settings
@@ -78,6 +79,7 @@ class Prepared:
     grounding: str = "ok"
     message_id: int = 0
     data_as_of: str | None = None
+    needs_title: bool = False
 
 
 @dataclass
@@ -119,6 +121,7 @@ class ChatRuntime:
         self.canary = canary or hashlib.sha256(b"fplbud-chat").hexdigest()[:16]
         self.cfg = cfg_from(settings)
         self._slots = asyncio.Semaphore(max(settings.chat_max_concurrent_turns, 1))
+        self._title_tasks: set[asyncio.Task[None]] = set()
         self.breaker = Breaker()
 
     def enabled_for(self, user_id: str) -> bool:
@@ -165,7 +168,7 @@ class ChatRuntime:
         if not clean:
             return Refuse(400, "EMPTY", "Ask a question about your FPL team.")
         await self._refresh_squad(user_id)
-        return await asyncio.to_thread(
+        prepared = await asyncio.to_thread(
             self._prepare_sync,
             user_id,
             thread_id,
@@ -173,6 +176,9 @@ class ChatRuntime:
             client_msg_id,
             client,
         )
+        if isinstance(prepared, Prepared) and prepared.needs_title:
+            self.schedule_title(prepared.thread_id, prepared.user_id, prepared.text)
+        return prepared
 
     async def _refresh_squad(self, user_id: str) -> None:
         try:
@@ -298,7 +304,17 @@ class ChatRuntime:
                 view=view,
                 cache=cache,
                 data_as_of=view.data_as_of,
+                needs_title=bool(claim.get("needs_title")),
             )
+
+    def schedule_title(self, thread_id: str, user_id: str, text: str) -> None:
+        task = asyncio.create_task(
+            write_thread_title(self.open_conn, self.settings, thread_id, user_id, text),
+            name="chat-title",
+        )
+        self._title_tasks.add(task)
+        task.add_done_callback(self._title_tasks.discard)
+        task.add_done_callback(_log_title_task)
 
     async def events(self, prepared: Prepared) -> AsyncIterator[ChatEvent]:
         if prepared.kind == "replay":
@@ -528,6 +544,14 @@ def committed(pool: ConnectionPool) -> OpenConn:
                 conn.commit()
 
     return open_conn
+
+
+def _log_title_task(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.warning("chat title failed error=%s", type(exc).__name__)
 
 
 def _stamp_version(conn: Any, turn_id: int, data_version: int | None) -> None:

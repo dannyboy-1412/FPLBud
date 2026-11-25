@@ -147,7 +147,7 @@ class _Model:
 
 
 def _settings(*, key: str = "test-key", model: str = "test/model") -> Settings:
-    return Settings(llm_enabled=False, llm_api_key=key, llm_model=model, llm_daily_call_cap=200)
+    return Settings(llm_api_key=key, llm_model=model, llm_daily_call_cap=200)
 
 
 async def test_model_lineup_is_kept_when_it_is_legal() -> None:

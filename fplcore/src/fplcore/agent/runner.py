@@ -221,6 +221,8 @@ async def _explanations(
     if allow_llm and isinstance(explainer, LLMExplainer):
         return await explainer.explain_run_async(results)
     texts = explainer.explain_run(results)
+    if not allow_llm:
+        return texts, "template"
     return texts, getattr(explainer, "source", "template")
 
 
@@ -308,7 +310,7 @@ async def run_claimed(
 
         update_progress(conn, run_id, stage="explain", progress=90)
         conn.commit()
-        allow_llm = cfg.llm_enabled and run.get("trigger") in {"import", "user_rerun"}
+        allow_llm = bool(cfg.llm_api_key and cfg.llm_model) and run.get("trigger") in {"import", "user_rerun"}
         if allow_llm and not try_llm_cap(conn, cfg.llm_daily_call_cap):
             allow_llm = False
         texts, source = await _explanations(results, cfg, allow_llm=allow_llm)

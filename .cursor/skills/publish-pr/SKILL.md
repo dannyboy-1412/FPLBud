@@ -80,13 +80,27 @@ Push with `git push -u origin HEAD`.
 
 If `gh pr view --json url` already returns a pull request, push and update the body. Do not open another.
 
+`--attach` uploads the pictures. It exists in GitHub CLI 2.99.0 and newer. Check before the first visual pull request in a session:
+
+```powershell
+gh pr create --help
+```
+
+If that help text has no `--attach`, upgrade and run the pull request command in a new shell. The installer updates `PATH`, and the current shell keeps the old `gh`.
+
+```powershell
+winget upgrade --id GitHub.cli --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+```
+
+Do not open or update a visual pull request without the pictures. Do not commit the screenshots to invent a URL.
+
 Write the body to a temp file. Use the same image path in the markdown and in `--attach`, so GitHub rewrites it to an uploaded URL.
 
 ```powershell
 gh pr create --base main --title "the outcome, in one line" --body-file $body --attach $before --attach $after
 ```
 
-Drop `--attach` when there are no screenshots. For an existing pull request, `gh pr edit --body-file $body` with the same attach flags.
+Drop `--attach` when there are no screenshots. For an existing pull request, `gh pr edit --body-file $body` with the same attach flags. After the body on GitHub uses uploaded image URLs, delete the local screenshot files.
 
 ```markdown
 ## What this does
@@ -115,8 +129,6 @@ Security review found no issues. Guest suggestions stay on the next gameweek, an
 ```
 
 Omit "Before and after" when there are no screenshots. Replace the security example with this change's real remarks.
-
-If this `gh` rejects `--attach`, publish the text. Say that the CLI cannot upload images, and where the files are. Do not commit them to invent a URL.
 
 Return the pull request URL.
 

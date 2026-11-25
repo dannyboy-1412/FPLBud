@@ -1,7 +1,7 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { ChatHistory } from "@/components/chat/ChatHistory";
 import { SettingsForm } from "@/components/programme/SettingsForm";
-import { SettingsSkeleton } from "@/components/programme/Skeletons";
+import { AssistantSettingsSkeleton, SettingsSkeleton } from "@/components/programme/Skeletons";
 import SectionError from "@/components/programme/SectionError";
 import { api, ApiError } from "@/lib/api";
 import { renderApi } from "@/lib/server/render-api";
@@ -9,18 +9,26 @@ import { getMe, loadMeta } from "@/lib/server/data";
 import { getAccessToken } from "@/lib/server/session";
 
 export default function SettingsPage() {
+  const assistantSection = (
+    <Suspense fallback={<AssistantSettingsSkeleton />}>
+      <ChatHistoryLoader />
+    </Suspense>
+  );
+
   return (
-    <>
-      <h1>Settings</h1>
+    <div className="settings-page">
+      <header className="settings-header">
+        <h1>Settings</h1>
+        <p className="settings-lede">
+          Tune how FPLBud scores players, plans transfers, and looks in this browser.
+        </p>
+      </header>
       <Suspense fallback={<SettingsSkeleton />}>
         <SectionError>
-          <SettingsLoader />
+          <SettingsLoader assistantSection={assistantSection} />
         </SectionError>
       </Suspense>
-      <Suspense>
-        <ChatHistoryLoader />
-      </Suspense>
-    </>
+    </div>
   );
 }
 
@@ -41,9 +49,9 @@ async function ChatHistoryLoader() {
   return <ChatHistory memory={memory} note={note} />;
 }
 
-async function SettingsLoader() {
+async function SettingsLoader({ assistantSection }: { assistantSection: ReactNode }) {
   return renderApi(async () => {
     const [me, meta] = await Promise.all([getMe(), loadMeta()]);
-    return <SettingsForm profile={me.profile} meta={meta} />;
+    return <SettingsForm profile={me.profile} meta={meta} assistantSection={assistantSection} />;
   });
 }

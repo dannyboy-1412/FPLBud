@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { GoogleButton } from "@/components/programme/GoogleButton";
 import { LandingLookup } from "@/components/programme/LandingLookup";
 import { LandingPitch } from "@/components/programme/LandingPitch";
@@ -8,6 +9,7 @@ import { getMe, loadMeta } from "@/lib/server/data";
 import { getSignedIn } from "@/lib/server/session";
 
 const PLAIN_HEADLINE = "Your XI, captain and transfer, worked out";
+const guestLede = "Bring a public team ID and get the starting XI, the captain and one transfer.";
 
 const STEPS = [
   ["Import", "A public team ID. No FPL password. Free transfers and selling prices come from the public record."],
@@ -55,11 +57,21 @@ async function GameweekHeadline() {
 
 async function LandingCopy() {
   const signedIn = await getSignedIn();
-  const profile = signedIn ? await memberProfile() : null;
+  if (!signedIn) {
+    return (
+      <>
+        <p className="prose-body landing-lede">{guestLede}</p>
+        <GuestAction />
+      </>
+    );
+  }
+  const profile = await memberProfile();
+  if (profile && !profile.fpl_entry_id) redirect("/onboarding");
+  if (profile?.fpl_entry_id) redirect("/chat");
   return (
     <>
-      <p className="prose-body landing-lede">{lede(Boolean(signedIn), profile)}</p>
-      {signedIn ? <MemberAction profile={profile} /> : <GuestAction />}
+      <p className="prose-body landing-lede">The assistant is open. Your team name did not load with it.</p>
+      <MemberAction />
     </>
   );
 }
@@ -72,46 +84,27 @@ async function memberProfile(): Promise<Profile | null> {
   }
 }
 
-function lede(signedIn: boolean, profile: Profile | null) {
-  if (!signedIn) {
-    return "Bring a public team ID and get the starting XI, the captain and one transfer.";
-  }
-  if (profile && !profile.fpl_entry_id) {
-    return "Finish setup to attach the one team on this account.";
-  }
-  const name = profile?.fpl_team_name;
-  return name
-    ? `${name} is saved here, with a plan for the XI, the captain and a transfer.`
-    : "This account keeps one squad, with a plan for the XI, the captain and a transfer.";
-}
-
 function GuestAction() {
   return (
     <div className="landing-action">
       <LandingLookup />
       <div className="landing-signin">
-        <p className="prose-body">Keep the three- and five-week plans on this account.</p>
+        <p className="prose-body">Sign in and ask the assistant about this team.</p>
         <GoogleButton />
       </div>
     </div>
   );
 }
 
-function MemberAction({ profile }: { profile: Profile | null }) {
-  if (profile && !profile.fpl_entry_id) {
-    return (
-      <div className="landing-action">
-        <Link href="/onboarding" className="btn btn-primary">
-          Set your team
-        </Link>
-      </div>
-    );
-  }
+function MemberAction() {
   return (
     <div className="landing-action">
-      <Link href="/dashboard" className="btn btn-primary">
-        Open your plans
+      <Link href="/chat" className="btn btn-primary">
+        Ask about your team
       </Link>
+      <p className="prose-body">
+        <Link href="/dashboard">Open your team</Link>
+      </p>
     </div>
   );
 }

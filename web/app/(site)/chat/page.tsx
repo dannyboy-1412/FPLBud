@@ -1,6 +1,7 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { ChatWorkspace } from "@/components/chat/ChatWorkspace";
-import { getChatThread, getChatThreads, getChatUsage, getMyTeam, loadMeta } from "@/lib/server/data";
+import { getChatThread, getChatThreads, getChatUsage, getMe, getMyTeam, loadMeta } from "@/lib/server/data";
 
 export default function ChatPage({ searchParams }: PageProps<"/chat">) {
   return (
@@ -14,12 +15,14 @@ async function ChatLoader({ searchParams }: { searchParams: PageProps<"/chat">["
   const params = await searchParams;
   const requested = firstParam(params.t);
   const teamPromise = getMyTeam().catch(() => null);
-  const [threadsResult, usage, threadResult, meta] = await Promise.all([
+  const [me, threadsResult, usage, threadResult, meta] = await Promise.all([
+    getMe().catch(() => null),
     getChatThreads(),
     getChatUsage(),
     requested ? getChatThread(requested) : Promise.resolve(null),
     loadMeta().catch(() => null),
   ]);
+  if (me && !me.profile.fpl_entry_id) redirect("/onboarding");
 
   if (threadsResult.status === "disabled" || threadResult?.status === "disabled") {
     return (

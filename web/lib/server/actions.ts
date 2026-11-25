@@ -68,7 +68,7 @@ export async function saveTeam(_prev: SaveTeamState, formData: FormData): Promis
   }
   updateTag(`team:${parsed.id}`);
   refresh();
-  redirect("/dashboard");
+  redirect("/chat");
 }
 
 export type RerunResult = { ok: true; runId: number } | { error: string };

@@ -32,7 +32,7 @@ async function TryTeam({ entryId }: { entryId: number }) {
     const token = await getAccessToken();
     if (token) {
       const me = await getMe();
-      if (me.profile.fpl_entry_id === entryId) redirect("/dashboard");
+      if (me.profile.fpl_entry_id === entryId) redirect("/chat");
     }
     const leadersPromise = getPositionLeaders();
     try {

@@ -19,10 +19,5 @@ function NavItem({ href, label, current }: { href: string; label: string; curren
 
 export function NavLinks() {
   const pathname = usePathname();
-  return (
-    <>
-      <NavItem href="/dashboard" label="Dashboard" current={pathname.startsWith("/dashboard")} />
-      <NavItem href="/chat" label="Assistant" current={pathname.startsWith("/chat")} />
-    </>
-  );
+  return <NavItem href="/dashboard" label="Team" current={pathname.startsWith("/dashboard")} />;
 }

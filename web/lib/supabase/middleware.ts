@@ -24,10 +24,24 @@ export async function updateSession(request: NextRequest) {
   });
   const { data } = await supabase.auth.getClaims();
   const path = request.nextUrl.pathname;
+  if (data?.claims && path === "/") {
+    const dest = request.nextUrl.clone();
+    dest.pathname = "/chat";
+    dest.search = "";
+    return redirectWithSession(dest, response);
+  }
   if (!data?.claims && PROTECTED.some((p) => path.startsWith(p))) {
     const login = request.nextUrl.clone();
     login.pathname = "/login";
     return NextResponse.redirect(login);
   }
   return response;
+}
+
+function redirectWithSession(dest: URL, session: NextResponse) {
+  const redirect = NextResponse.redirect(dest);
+  for (const cookie of session.headers.getSetCookie()) {
+    redirect.headers.append("set-cookie", cookie);
+  }
+  return redirect;
 }

@@ -106,6 +106,15 @@ body {
 }
 
 .page { max-width: 1200px; margin: 0 auto; padding: 0 24px 96px; }
+
+.team-record { margin-top: 28px; max-width: 40rem; }
+.team-record h1 { font-size: 2rem; }
+.team-record-when {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-style: italic;
+  color: var(--ink-soft);
+}
 .kicker {
   font-size: 0.75rem; line-height: 1; letter-spacing: 0.14em;
   text-transform: uppercase; font-weight: 600; font-family: var(--font-instrument), system-ui, sans-serif;
@@ -1207,6 +1216,13 @@ a.masthead-link[aria-current="page"] { color: var(--ink); text-decoration-color:
   font-size: 0.95rem;
   line-height: 1.45;
 }
+
+.chat-brief-record {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  text-underline-offset: 3px;
+}
+.chat-brief-record:hover { color: var(--ink); }
 
 .chat-missing {
   margin: 0;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { Check, Minus, Plus, SignOut } from "@phosphor-icons/react";
 import { SelectionCriteria } from "@/components/programme/SelectionCriteria";
 import {
@@ -16,9 +16,8 @@ import {
 } from "@/components/programme/settings-model";
 import { deleteAccount, saveSettings } from "@/lib/server/actions";
 import { createClient } from "@/lib/supabase/client";
+import { applyEdition, persistEdition, readStoredEdition, type Edition } from "@/lib/edition";
 import type { Meta, Profile, Weights } from "@/lib/api";
-
-type Edition = "morning" | "evening";
 
 const EDITIONS: ReadonlyArray<{
   id: Edition;
@@ -28,22 +27,6 @@ const EDITIONS: ReadonlyArray<{
   { id: "morning", label: "Morning edition", caption: "Daylight paper and forest ink" },
   { id: "evening", label: "Evening edition", caption: "Dark pitch paper for low light" },
 ];
-
-function applyEdition(next: Edition) {
-  if (next === "evening") {
-    document.documentElement.setAttribute("data-edition", "evening");
-    return;
-  }
-  document.documentElement.removeAttribute("data-edition");
-}
-
-function readStoredEdition(): Edition {
-  try {
-    return window.localStorage.getItem("edition") === "evening" ? "evening" : "morning";
-  } catch {
-    return "morning";
-  }
-}
 
 export function SettingsForm({
   profile,
@@ -80,12 +63,11 @@ export function SettingsForm({
   const isDefaultWeights = weightsEqual(weights, meta.default_weights);
   const canSave = isDirty && metricTotal(weights) > 0 && !saving;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const stored = readStoredEdition();
+    if (!stored) return;
     applyEdition(stored);
-    if (stored === "evening") {
-      setEdition("evening");
-    }
+    setEdition(stored);
   }, []);
 
   useEffect(() => {
@@ -151,11 +133,7 @@ export function SettingsForm({
   function selectEdition(next: Edition) {
     setEdition(next);
     applyEdition(next);
-    try {
-      window.localStorage.setItem("edition", next);
-    } catch {
-      /* ignore unavailable storage */
-    }
+    persistEdition(next);
   }
 
   function closeDeleteModal() {

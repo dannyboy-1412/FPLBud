@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Instrument_Sans, Newsreader } from "next/font/google";
+import { EditionPreference } from "@/components/EditionPreference";
+import { EDITION_BOOT_SCRIPT } from "@/lib/edition";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -30,9 +32,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${fraunces.variable} ${newsreader.variable} ${instrument.variable} h-full`}
     >
-      <body className="min-h-full bg-paper text-ink">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: EDITION_BOOT_SCRIPT }} />
+      </head>
+      <body className="min-h-full bg-paper text-ink">
+        <EditionPreference />
+        {children}
+      </body>
     </html>
   );
 }

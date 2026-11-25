@@ -94,12 +94,38 @@ export function TableSkeleton() {
 
 export function SettingsSkeleton() {
   return (
-    <div className="mt-8 space-y-4" aria-hidden>
-      <div className="skeleton h-3 w-40" />
-      {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="skeleton h-16 w-full" />
+    <div className="settings-stack" aria-hidden="true">
+      {Array.from({ length: 3 }, (_, chapter) => (
+        <div key={chapter} className="settings-chapter">
+          <div className="settings-aside">
+            <div className="skeleton h-7 w-40 mb-3" />
+            <div className="skeleton h-4 w-full mb-2" />
+            <div className="skeleton h-4 w-4/5" />
+          </div>
+          <div className="settings-panel space-y-3">
+            {Array.from({ length: chapter === 0 ? 5 : 2 }, (_, row) => (
+              <div key={row} className="skeleton h-14 w-full" />
+            ))}
+          </div>
+        </div>
       ))}
     </div>
+  );
+}
+
+export function AssistantSettingsSkeleton() {
+  return (
+    <section className="settings-chapter" aria-hidden="true">
+      <div className="settings-aside">
+        <div className="skeleton h-7 w-28 mb-3" />
+        <div className="skeleton h-4 w-full mb-2" />
+        <div className="skeleton h-4 w-3/4" />
+      </div>
+      <div className="settings-panel space-y-3">
+        <div className="skeleton h-12 w-full" />
+        <div className="skeleton h-12 w-full" />
+      </div>
+    </section>
   );
 }
 

@@ -3,23 +3,25 @@ name: feature-security-review
 description: >-
   Reviews a finished FPLBud change for security issues and for edits that
   alter existing behavior the feature did not need to change. Use after a
-  feature, bug fix, or other behavior change, before the final response.
-  Launches a separate security analyst with the feature intent only; the
-  analyst reads the diff and surrounding code itself. Covers guest and
-  signed-in access, JWT, row level security, horizons, the chat guard, and
-  ordinary vulnerabilities. Skip questions, plans, reviews that do not edit
-  code, and formatting or docs with no behavior change.
+  feature, bug fix, or other change to access, stored data, or which
+  requests run, before the final response. Launches a separate security
+  analyst with the feature intent only; the analyst reads the diff and
+  surrounding code itself. Covers guest and signed-in access, JWT, row
+  level security, horizons, the chat guard, and ordinary vulnerabilities.
+  Skip questions, plans, reviews that do not edit code, formatting or docs,
+  and small simple changes that only swap an icon, image, font, copy, or
+  styling.
 ---
 
 # Feature security review
 
-After a behavior change, before the change handoff and before the final response, launch one security analyst. The analyst decides whether this change moves existing behavior it did not need to touch, and whether the diff introduces a vulnerability.
+After a change that can affect access, stored data, or which requests run, launch one security analyst before the change handoff and before the final response. The analyst decides whether this change moves existing behavior it did not need to touch, and whether the diff introduces a vulnerability.
 
-The analyst has not seen this conversation. It does not edit files. Do not review the diff yourself before launching it.
+The analyst has not seen this conversation. It does not edit files. Do not review the diff yourself before launching it. Decide whether to launch from the diff. Do not launch the analyst in order to decide whether this review applies.
 
 ## When to run
 
-Run when this task changed behavior in any of:
+Run when this task changes who can do what, what data is read or written, or which requests run, in any of:
 
 - `web/`
 - `api/`
@@ -30,12 +32,17 @@ Run when this task changed behavior in any of:
 - `tests/` when the test locks in that behavior
 - workflow config that changes how those packages run
 
+A file under those paths is not enough. Replacing the app icon, a favicon, an image, or a font does not need this review.
+
 Skip when:
 
 - the task was a question, review, or plan and nothing was edited
 - the only edits are formatting, comments, or docs
+- the change is small and simple: static assets (icons, images, fonts), copy, or styling, and nothing else moved
 - the user asks to skip the security review
 - you are the analyst (do not launch another one)
+
+Do not skip a short diff that touches auth, a route, the database, chat, the agent, ingest, or a condition that decides access or stored data. If you are unsure whether the change only affects appearance, run the review.
 
 ## Feature brief
 

@@ -24,16 +24,16 @@ Skip when there is nothing to publish, the user says to push to `main` or to ski
 
 ## Order
 
-1. Security review, if this change does not already have one.
+1. Security review, when `.cursor/skills/feature-security-review/SKILL.md` says to run one.
 2. Commit, on the right branch.
 3. Screenshots, only when the visual change is big.
 4. Push, then open or update the pull request.
 
 ## Security review
 
-The pull request includes the security analyst's remarks for this change.
+The pull request includes the security analyst's remarks when a review ran.
 
-If this session already has the report, use it. If it does not, follow `.cursor/skills/feature-security-review/SKILL.md` before the commit, so a fix lands in the commit.
+If this session already has the report, use it. If `.cursor/skills/feature-security-review/SKILL.md` says to skip, write one sentence that the review was skipped and why. Do not launch the analyst for a change that skill skips. If a review was required and this session has no report, follow that skill before the commit, so a fix lands in the commit.
 
 In the body, write what the analyst concluded. Plain sentences.
 
@@ -128,7 +128,7 @@ Security review found no issues. Guest suggestions stay on the next gameweek, an
 - [ ] <one action, and what you should see>
 ```
 
-Omit "Before and after" when there are no screenshots. Replace the security example with this change's real remarks.
+Omit "Before and after" when there are no screenshots. Replace the security example with this change's real remarks, or with one sentence on why the review was skipped.
 
 Return the pull request URL.
 

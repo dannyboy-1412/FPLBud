@@ -131,7 +131,7 @@ class ToolRegistry:
         self._open_conn = open_conn
         self._db_slots = asyncio.Semaphore(max(db_slots, 1))
         self._optimiser = asyncio.Semaphore(max(optimiser_slots, 1))
-        self._flight: dict[str, asyncio.Future[ToolResult]] = {}
+        self._flight: dict[tuple[int, str], asyncio.Future[ToolResult]] = {}
         self._flight_lock = asyncio.Lock()
         self._max_optimiser_calls = max_optimiser_calls
         self._soft_cap = result_soft_cap
@@ -156,35 +156,50 @@ class ToolRegistry:
         *,
         turn_id: int | None = None,
         round_no: int = 1,
+        model: str | None = None,
     ) -> ToolResult:
         counters.tool_calls += 1
         tool = self._tools.get(call.name)
         if tool is None:
-            return failure(
+            result = failure(
                 "UNKNOWN_TOOL",
                 f"No tool named {call.name}.",
                 hint="Valid tools: " + ", ".join(self._order),
             )
+            self._span(turn_id, round_no, call, call.arguments, result, ctx=ctx, model=model)
+            return result
         if call.parse_error or call.arguments is None:
-            return failure("INVALID_ARGUMENT", call.parse_error or "Arguments were not JSON.")
+            result = failure("INVALID_ARGUMENT", call.parse_error or "Arguments were not JSON.")
+            self._span(turn_id, round_no, call, None, result, ctx=ctx, model=model)
+            return result
         try:
             args = tool.args_model.model_validate(call.arguments)
         except ValidationError as exc:
-            return _invalid(exc)
+            result = _invalid(exc)
+            self._span(turn_id, round_no, call, call.arguments, result, ctx=ctx, model=model)
+            return result
         key = call.name + "\n" + args.model_dump_json()
+        flight_key = (id(seen), key)
+        prior: ToolResult | None = None
+        leader_box: asyncio.Future[ToolResult] | None = None
+        leading = False
         async with self._flight_lock:
             prior = seen.get(key)
-            if prior is not None:
-                return _memo(prior)
-            leader_box = self._flight.get(key)
-            if leader_box is None:
-                leader_box = asyncio.get_running_loop().create_future()
-                self._flight[key] = leader_box
-                leading = True
-            else:
-                leading = False
+            if prior is None:
+                leader_box = self._flight.get(flight_key)
+                if leader_box is None:
+                    leader_box = asyncio.get_running_loop().create_future()
+                    self._flight[flight_key] = leader_box
+                    leading = True
+        if prior is not None:
+            result = _memo(prior)
+            self._span(turn_id, round_no, call, args, result, ctx=ctx, model=model, cached=True)
+            return result
         if not leading:
-            return _memo(await leader_box)
+            assert leader_box is not None
+            result = _memo(await leader_box)
+            self._span(turn_id, round_no, call, args, result, ctx=ctx, model=model, cached=True)
+            return result
         try:
             if call.name == OPTIMISER_TOOL and counters.optimiser_calls >= self._max_optimiser_calls:
                 result = failure(
@@ -204,10 +219,11 @@ class ToolRegistry:
             result = failure("INTERNAL", "The tool failed. Answer without it.")
         async with self._flight_lock:
             seen[key] = result
-            self._flight.pop(key, None)
+            self._flight.pop(flight_key, None)
+        assert leader_box is not None
         if not leader_box.done():
             leader_box.set_result(result)
-        self._span(turn_id, round_no, call, args, result)
+        self._span(turn_id, round_no, call, args, result, ctx=ctx, model=model)
         return result
 
     async def _invoke(self, tool: BoundTool, ctx: ToolContext, args: BaseModel, name: str) -> ToolResult:
@@ -243,21 +259,29 @@ class ToolRegistry:
         turn_id: int | None,
         round_no: int,
         call: ToolCall,
-        args: BaseModel,
+        args: BaseModel | dict[str, Any] | None,
         result: ToolResult,
+        *,
+        ctx: ToolContext | None = None,
+        model: str | None = None,
+        cached: bool = False,
     ) -> None:
         if self._record_span is None or turn_id is None:
             return
         payload = {
             "turn_id": turn_id,
+            "user_id": ctx.user_id or None if ctx is not None else None,
+            "thread_id": ctx.thread_id or None if ctx is not None else None,
+            "model": model or None,
             "round": round_no,
             "name": call.name,
-            "args": args.model_dump(mode="json"),
+            "args": _serialise_args(args),
             "ok": result.ok,
             "error_code": result.error.code if result.error else None,
+            "cached": cached,
             "result_tokens": estimate_tokens(result.to_model_text()),
             "result": result.envelope(),
-            "duration_ms": result.duration_ms,
+            "duration_ms": 0 if cached else result.duration_ms,
             "injection_suspected": result.injection_suspected,
         }
         try:
@@ -265,6 +289,14 @@ class ToolRegistry:
                 self._record_span(conn, payload)
         except Exception:
             logger.exception("chat span persist failed")
+
+
+def _serialise_args(args: BaseModel | dict[str, Any] | None) -> dict[str, Any] | None:
+    if isinstance(args, BaseModel):
+        return args.model_dump(mode="json")
+    if isinstance(args, dict):
+        return args
+    return None
 
 
 def _invalid(exc: ValidationError) -> ToolResult:

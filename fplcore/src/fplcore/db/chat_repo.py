@@ -374,7 +374,7 @@ def append_messages(
 def record_tool_call(
     conn: Connection,
     *,
-    turn_id: int,
+    turn_id: int | None,
     round_no: int,
     name: str,
     args: dict[str, Any] | None,
@@ -383,20 +383,29 @@ def record_tool_call(
     result_tokens: int | None,
     result: dict[str, Any] | None,
     duration_ms: int | None,
+    user_id: str | None = None,
+    thread_id: str | None = None,
+    model: str | None = None,
+    cached: bool = False,
 ) -> None:
     conn.execute(
         """
         insert into chat_tool_calls
-          (turn_id, round, name, args, ok, error_code, result_tokens, result, duration_ms)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+          (turn_id, user_id, thread_id, model, round, name, args, ok, error_code,
+           cached, result_tokens, result, duration_ms)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         [
             turn_id,
+            user_id,
+            thread_id,
+            model,
             round_no,
             name,
             _json(args),
             ok,
             error_code,
+            cached,
             result_tokens,
             _json(result),
             duration_ms,
@@ -621,9 +630,10 @@ def count_optimiser_calls(conn: Connection, user_id: str, *, within_seconds: int
         """
         select count(*) as n
           from chat_tool_calls c
-          join chat_turns t on t.id = c.turn_id
-         where t.user_id = %s
+         where c.user_id = %s
            and c.name = 'run_transfer_optimiser'
+           and not c.cached
+           and coalesce(c.error_code, '') not in ('INVALID_ARGUMENT', 'UNKNOWN_TOOL', 'RATE_LIMITED')
            and c.created_at > now() - (%s || ' seconds')::interval
         """,
         [user_id, within_seconds],
@@ -743,7 +753,7 @@ def load_turn_trace(conn: Connection, turn_id: int) -> dict[str, Any] | None:
     ).fetchall()
     tools = conn.execute(
         """
-        select round, name, args, ok, error_code, result_tokens, duration_ms, result
+        select round, name, args, ok, error_code, cached, model, result_tokens, duration_ms, result
           from chat_tool_calls
          where turn_id = %s
          order by id
@@ -794,6 +804,20 @@ def prune_chat(
     usage_days: int,
     proposal_days: int = 1,
 ) -> dict[str, int]:
+    scrubbed = conn.execute(
+        """
+        update chat_tool_calls
+           set args = null, result = null
+         where turn_id in (
+               select t.id
+                 from chat_turns t
+                 join chat_threads th on th.id = t.thread_id
+                where th.updated_at < now() - (%s || ' days')::interval
+         )
+           and (args is not null or result is not null)
+        """,
+        [thread_days],
+    )
     threads = conn.execute(
         """
         delete from chat_threads
@@ -828,6 +852,7 @@ def prune_chat(
     return {
         "chat_threads": int(threads.rowcount),
         "chat_tool_calls": int(traces.rowcount),
+        "chat_tool_calls_scrubbed": int(scrubbed.rowcount),
         "chat_usage": int(usage.rowcount),
         "chat_usage_global": int(global_usage.rowcount),
         "chat_memory_proposals": int(proposals.rowcount),
